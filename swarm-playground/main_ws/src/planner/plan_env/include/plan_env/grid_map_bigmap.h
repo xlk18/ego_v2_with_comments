@@ -416,7 +416,7 @@ inline bool GridMap::isInMap(const Eigen::Vector3i &idx)
   }
   return true;
 }
-
+//三维空间中的实际坐标（pos）转换为栅格地图中的索引（id）
 inline void GridMap::posToIndex(const Eigen::Vector3d &pos, Eigen::Vector3i &id)
 {
   for (int i = 0; i < 3; ++i)

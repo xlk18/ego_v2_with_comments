@@ -32,30 +32,30 @@ namespace ego_planner
     t_now_ = ros::Time::now().toSec();
     piece_num_ = initT.size();
     jerkOpt_.reset(iniState, finState, piece_num_);
-    variable_num_ = 4 * (piece_num_ - 1) + 1;
+    variable_num_ = 4 * (piece_num_ - 1) + 1; //内点三维坐标加上时间变量，优化变量总数
     double x_init[variable_num_];
-    memcpy(x_init, initInnerPts.data(), initInnerPts.size() * sizeof(x_init[0]));
-    Eigen::Map<Eigen::VectorXd> Vt(x_init + initInnerPts.size(), initT.size());
-    RealT2VirtualT(initT, Vt);
+    memcpy(x_init, initInnerPts.data(), initInnerPts.size() * sizeof(x_init[0]));  // 复制约束点坐标
+    Eigen::Map<Eigen::VectorXd> Vt(x_init + initInnerPts.size(), initT.size());   // 映射时间部分
+    RealT2VirtualT(initT, Vt);                                 // 实际时间转换为无约束虚拟时间
     min_ellip_dist2_.resize(swarm_trajs_->size());
 
     // Preparision 3: LBFGS related params
-    lbfgs::lbfgs_parameter_t lbfgs_params;
-    lbfgs::lbfgs_load_default_parameters(&lbfgs_params);
-    lbfgs_params.mem_size = 16;
-    lbfgs_params.max_iterations = 200;
-    lbfgs_params.min_step = 1e-32;
+    lbfgs::lbfgs_parameter_t lbfgs_params;                      // L-BFGS参数结构
+    lbfgs::lbfgs_load_default_parameters(&lbfgs_params);       // 加载默认参数
+    lbfgs_params.mem_size = 16;                                 // 历史信息存储数量
+    lbfgs_params.max_iterations = 200;                          // 最大迭代次数
+    lbfgs_params.min_step = 1e-32;                              // 最小步长
     // lbfgs_params.abs_curv_cond = 0;
-    lbfgs_params.past = 3;
-    lbfgs_params.delta = 1.0e-2;
+    lbfgs_params.past = 3;                                      // 收敛判断的历史步数
+    lbfgs_params.delta = 1.0e-2;                               // 收敛判断阈值
     do
     {
       /* ---------- prepare ---------- */
-      iter_num_ = 0;
-      flag_force_return = false;
-      force_stop_type_ = DONT_STOP;
-      flag_still_unsafe = false;
-      flag_success = false;
+      iter_num_ = 0;    // 迭代次数重置
+      flag_force_return = false;    // 强制返回标志
+      force_stop_type_ = DONT_STOP;   // 停止类型
+      flag_still_unsafe = false;    // 仍不安全标志
+      flag_success = false;   // 成功标志
       flag_swarm_too_close = false;
 
       /* ---------- optimize ---------- */
@@ -64,21 +64,21 @@ namespace ego_planner
           variable_num_,
           x_init,
           &final_cost,
-          PolyTrajOptimizer::costFunctionCallback,
+          PolyTrajOptimizer::costFunctionCallback,    // 代价函数回调
           NULL,
-          PolyTrajOptimizer::earlyExitCallback,
+          PolyTrajOptimizer::earlyExitCallback,       // 提前退出回调
           this,
           &lbfgs_params);
 
       t2 = ros::Time::now();
-      double time_ms = (t2 - t1).toSec() * 1000;
+      double time_ms = (t2 - t1).toSec() * 1000;    // 优化耗时（毫秒）
       double total_time_ms = (t2 - t0).toSec() * 1000;
 
       /* ---------- get result and check collision ---------- */
-      if (result == lbfgs::LBFGS_CONVERGENCE ||
-          result == lbfgs::LBFGSERR_MAXIMUMITERATION ||
-          result == lbfgs::LBFGS_ALREADY_MINIMIZED ||
-          result == lbfgs::LBFGS_STOP)
+      if (result == lbfgs::LBFGS_CONVERGENCE ||             //收敛
+          result == lbfgs::LBFGSERR_MAXIMUMITERATION ||     //达到最大迭代次数
+          result == lbfgs::LBFGS_ALREADY_MINIMIZED ||       //已经是最优
+          result == lbfgs::LBFGS_STOP)                      //停止  
       {
         flag_force_return = false;
 
@@ -126,7 +126,7 @@ namespace ego_planner
 
     } while ((flag_still_unsafe && restart_nums < 3) ||
              (flag_force_return && force_stop_type_ == STOP_FOR_REBOUND && rebound_times <= 20));
-
+    //如果轨迹仍然不安全，最多重启优化3次；如果需要回弹，最多尝试20次回弹
     return flag_success;
   }
 
@@ -136,18 +136,22 @@ namespace ego_planner
   {
     pts_check.clear();
     pts_check.resize(id_cps_end);
+    // 地图分辨率
     const double RES = grid_map_->getResolution(), RES_2 = RES / 2;
+    // 得到每段轨迹的持续时间
     Eigen::VectorXd durations = traj.getDurations();
     Eigen::VectorXd t_seg_start(durations.size() + 1);
     t_seg_start(0) = 0;
+    // 计算每段轨迹的起始时间
     for (int i = 0; i < durations.size(); ++i)
       t_seg_start(i + 1) = t_seg_start(i) + durations(i);
-    const double DURATION = durations.sum();
+    const double DURATION = durations.sum(); //轨迹总时长
+    // 采样步长，取决于最大速度和地图分辨率，以及每段轨迹的时间和约束点数量，取最小确保采样密度
     double t = 0.0, t_step = min(RES / max_vel_, durations.minCoeff() / max(cps_num_prePiece_, 1) / 1.5);
-    Eigen::Vector3d pt_last = traj.getPos(0.0);
+    Eigen::Vector3d pt_last = traj.getPos(0.0); //轨迹起点位置
     // pts_check[0].push_back(pt_last);
     int id_cps_curr = 0, id_piece_curr = 0;
-
+    // 对轨迹进行更细致的采样，轨迹分成若干段，每段cps_num_prePiece_个约束点，每个约束点对应之后的时间内的采样点
     while (true)
     {
       if (t > DURATION)
@@ -176,7 +180,8 @@ namespace ego_planner
           return false;
         }
       }
-
+      // 每段的起始时间+时间分成cps_num_prePiece_段（piece索引是0就是id_cps_curr + 1，piece索引非零就减去cps_num_prePiece_ * id_piece_curr，确保在该段内）
+      // 每个控制点对应的时间采样多个点
       const double next_t_stp = t_seg_start(id_piece_curr) + durations(id_piece_curr) / cps_num_prePiece_ * ((id_cps_curr + 1) - cps_num_prePiece_ * id_piece_curr);
       if (t >= next_t_stp)
       {
@@ -191,6 +196,7 @@ namespace ego_planner
       }
 
       Eigen::Vector3d pt = traj.getPos(t);
+      // 初始时刻，当前约束点没有数据，或者距离上一个采样点较远，则加入
       if (t < 1e-5 || pts_check[id_cps_curr].size() == 0 || (pt - pt_last).cwiseAbs().maxCoeff() > RES_2)
       {
         pts_check[id_cps_curr].emplace_back(std::pair<double, Eigen::Vector3d>(t, pt));
@@ -215,45 +221,50 @@ namespace ego_planner
 
     if (flag_first_init)
     {
+      // cps是一个类，包含了约束点的信息
       cps_.resize_cp(init_points.cols());
       cps_.points = init_points;
     }
 
-    /*** Segment the initial trajectory according to obstacles ***/
-    vector<std::pair<int, int>> segment_ids;
-    constexpr int ENOUGH_INTERVAL = 2;
-    int in_id = -1, out_id = -1;
-    int same_occ_state_times = ENOUGH_INTERVAL + 1;
-    bool occ, last_occ = false;
+    /*** 根据障碍物对初始轨迹进行分段 ***/
+    vector<std::pair<int, int>> segment_ids;           // 存储碰撞段的起止ID
+    constexpr int ENOUGH_INTERVAL = 2;                 // 足够的间隔阈值,当连续相同占用状态的计数保持足够次数，认为状态稳定
+    int in_id = -1, out_id = -1;                      // 进入和退出障碍物的约束点ID
+    int same_occ_state_times = ENOUGH_INTERVAL + 1;    // 连续相同占用状态的计数
+    bool occ, last_occ = false;                       // 当前和上一个点的占用状态
     bool flag_got_start = false, flag_got_end = false, flag_got_end_maybe = false;
-    int i_end = ConstraintPoints::two_thirds_id(init_points, touch_goal_); // only check closed 2/3 points.
+    // 如果没有touch_goal，只检查前2/3的点。
+    int i_end = ConstraintPoints::two_thirds_id(init_points, touch_goal_);
 
+    // 点集集合，每个点集由若干个带时间戳的三维点组成
     PtsChk_t pts_check;
     if (!computePointsToCheck(traj, i_end, pts_check))
     {
       return CHK_RET::ERR;
     }
-
+    // 遍历所有轨迹的粗采样点
     for (int i = 0; i < i_end; ++i)
     {
+      // 遍历对应粗采样点的所有细采样点
       for (size_t j = 0; j < pts_check[i].size(); ++j)
       {
         occ = grid_map_->getInflateOccupancy(pts_check[i][j].second);
-
+        // 上个点是空闲，这个点是占用
         if (occ && !last_occ)
         {
           if (same_occ_state_times > ENOUGH_INTERVAL || i == 0)
           {
-            in_id = i;
-            flag_got_start = true;
+            in_id = i;  // 记录进入障碍物的约束点ID
+            flag_got_start = true;   // 标记找到了起始
           }
-          same_occ_state_times = 0;
+          same_occ_state_times = 0;  // 重置计数器
           flag_got_end_maybe = false; // terminate in advance
         }
+        // 上个点是占用，这个点是空闲
         else if (!occ && last_occ)
         {
-          out_id = i + 1;
-          flag_got_end_maybe = true;
+          out_id = i + 1; // 记录退出障碍物的约束点ID
+          flag_got_end_maybe = true;  // 标记可能找到了结束
           same_occ_state_times = 0;
         }
         else
@@ -261,6 +272,7 @@ namespace ego_planner
           ++same_occ_state_times;
         }
 
+        // 如果已经标记可能找到了结束，并且连续相同占用状态的计数保持足够次数，或者已经到达最后一个点
         if (flag_got_end_maybe && (same_occ_state_times > ENOUGH_INTERVAL || (i == i_end - 1)))
         {
           flag_got_end_maybe = false;
@@ -278,6 +290,7 @@ namespace ego_planner
             ROS_ERROR("Should not happen! in_id=%d, out_id=%d", in_id, out_id);
             return CHK_RET::ERR;
           }
+          // 记录一对进入和退出障碍物的约束点ID，初始轨迹上固定个数的采样点
           segment_ids.push_back(std::pair<int, int>(in_id, out_id));
         }
       }
@@ -295,13 +308,14 @@ namespace ego_planner
     {
       // Search from back to head
       Eigen::Vector3d in(init_points.col(segment_ids[i].second)), out(init_points.col(segment_ids[i].first));
-      ASTAR_RET ret = a_star_->AstarSearch(grid_map_->getResolution(), in, out);
+      ASTAR_RET ret = a_star_->AstarSearch(grid_map_->getResolution(), in, out);  //返回路径是从终点到起点
       if (ret == ASTAR_RET::SUCCESS)
       {
         a_star_pathes.push_back(a_star_->getPath());
       }
       else if (ret == ASTAR_RET::SEARCH_ERR && i + 1 < segment_ids.size()) // connect the next segment
       {
+        // 如果a*搜索失败，将当前碰撞段与下一碰撞段合并，重新对当前段搜索
         segment_ids[i].second = segment_ids[i + 1].second;
         segment_ids.erase(segment_ids.begin() + i + 1);
         --i;
@@ -314,7 +328,7 @@ namespace ego_planner
       }
     }
 
-    /*** calculate bounds ***/
+    /*** calculate bounds计算每个碰撞段的调整边界 ***/
     int id_low_bound, id_up_bound;
     vector<std::pair<int, int>> bounds(segment_ids.size());
     for (size_t i = 0; i < segment_ids.size(); i++)
@@ -322,23 +336,26 @@ namespace ego_planner
 
       if (i == 0) // first segment
       {
-        id_low_bound = 1;
+        id_low_bound = 1; //起点不能改变
         if (segment_ids.size() > 1)
         {
+          // 上界是与下一段的中点
           id_up_bound = (int)(((segment_ids[0].second + segment_ids[1].first) - 1.0f) / 2); // id_up_bound : -1.0f fix()
         }
         else
         {
-          id_up_bound = init_points.cols() - 2;
+          id_up_bound = init_points.cols() - 2; // 不能调整终点
         }
       }
       else if (i == segment_ids.size() - 1) // last segment, i != 0 here
       {
+        // 下界是与上一段的中点
         id_low_bound = (int)(((segment_ids[i].first + segment_ids[i - 1].second) + 1.0f) / 2); // id_low_bound : +1.0f ceil()
         id_up_bound = init_points.cols() - 2;
       }
       else
       {
+        // 边界都是与相邻段的中点
         id_low_bound = (int)(((segment_ids[i].first + segment_ids[i - 1].second) + 1.0f) / 2); // id_low_bound : +1.0f ceil()
         id_up_bound = (int)(((segment_ids[i].second + segment_ids[i + 1].first) - 1.0f) / 2);  // id_up_bound : -1.0f fix()
       }
@@ -346,7 +363,7 @@ namespace ego_planner
       bounds[i] = std::pair<int, int>(id_low_bound, id_up_bound);
     }
 
-    /*** Adjust segment length ***/
+    /*** Adjust segment length 对包含粗采样点少的片段进行延长***/
     vector<std::pair<int, int>> adjusted_segment_ids(segment_ids.size());
     constexpr double MINIMUM_PERCENT = 0.0; // Each segment is guaranteed to have sufficient points to generate sufficient force
     int minimum_points = round(init_points.cols() * MINIMUM_PERCENT), num_points;
@@ -373,6 +390,7 @@ namespace ego_planner
       }
     }
 
+    // 防止两个碰撞段的边界重叠
     for (size_t i = 1; i < adjusted_segment_ids.size(); i++) // Avoid overlap
     {
       if (adjusted_segment_ids[i - 1].second >= adjusted_segment_ids[i].first)
@@ -384,21 +402,23 @@ namespace ego_planner
     }
 
     // Used for return
-    vector<std::pair<int, int>> final_segment_ids;
+    vector<std::pair<int, int>> final_segment_ids;//最终的碰撞段索引
 
     /*** Assign data to each segment ***/
     for (size_t i = 0; i < segment_ids.size(); i++)
     {
       // step 1
       for (int j = adjusted_segment_ids[i].first; j <= adjusted_segment_ids[i].second; ++j)
-        cps_.flag_temp[j] = false;
+        cps_.flag_temp[j] = false;  //cps_是初始轨迹的约束点（粗采样）
 
       // step 2
       int got_intersection_id = -1;
       for (int j = segment_ids[i].first + 1; j < segment_ids[i].second; ++j)
       {
+        // 当前点的切向量
         Eigen::Vector3d ctrl_pts_law(init_points.col(j + 1) - init_points.col(j - 1)), intersection_point;
         int Astar_id = a_star_pathes[i].size() / 2, last_Astar_id; // Let "Astar_id = id_of_the_most_far_away_Astar_point" will be better, but it needs more computation
+        // 判断当前a*路径的点在约束点的哪一侧
         double val = (a_star_pathes[i][Astar_id] - init_points.col(j)).dot(ctrl_pts_law), init_val = val;
         while (true)
         {
@@ -423,7 +443,7 @@ namespace ego_planner
           }
 
           val = (a_star_pathes[i][Astar_id] - init_points.col(j)).dot(ctrl_pts_law);
-
+          // 符号变化，说明垂直点在这两个a*路径点之间，插值得到垂直点
           if (val * init_val <= 0 && (abs(val) > 0 || abs(init_val) > 0)) // val = init_val = 0.0 is not allowed
           {
             intersection_point =
@@ -445,12 +465,14 @@ namespace ego_planner
             cps_.flag_temp[j] = true;
             for (double a = length; a >= 0.0; a -= grid_map_->getResolution())
             {
+              //  在约束点和垂直点之间，按地图分辨率递减采样，从垂直点向约束点方向采样，找到最近的安全点
               bool occ = grid_map_->getInflateOccupancy((a / length) * intersection_point + (1 - a / length) * init_points.col(j));
 
               if (occ || a < grid_map_->getResolution())
               {
                 if (occ)
                   a += grid_map_->getResolution();
+                // 记录p和单位向量v
                 cps_.base_point[j].push_back((a / length) * intersection_point + (1 - a / length) * init_points.col(j));
                 cps_.direction[j].push_back((intersection_point - init_points.col(j)).normalized());
                 break;
@@ -468,7 +490,7 @@ namespace ego_planner
       if (segment_ids[i].second - segment_ids[i].first == 1)
       {
         Eigen::Vector3d ctrl_pts_law(init_points.col(segment_ids[i].second) - init_points.col(segment_ids[i].first)), intersection_point;
-        Eigen::Vector3d middle_point = (init_points.col(segment_ids[i].second) + init_points.col(segment_ids[i].first)) / 2;
+        Eigen::Vector3d middle_point = (init_points.col(segment_ids[i].second) + init_points.col(segment_ids[i].first)) / 2;  // 长度太短用中点代替
         int Astar_id = a_star_pathes[i].size() / 2, last_Astar_id; // Let "Astar_id = id_of_the_most_far_away_Astar_point" will be better, but it needs more computation
         double val = (a_star_pathes[i][Astar_id] - middle_point).dot(ctrl_pts_law), init_val = val;
         while (true)

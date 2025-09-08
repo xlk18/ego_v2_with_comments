@@ -96,12 +96,12 @@ void GridMap::initMap(ros::NodeHandle &nh)
   depth_sub_.reset(new message_filters::Subscriber<sensor_msgs::Image>(node_, "grid_map/depth", 50));
   extrinsic_sub_ = node_.subscribe<nav_msgs::Odometry>(
       "/vins_estimator/extrinsic", 10, &GridMap::extrinsicCallback, this); //sub
-
+ // 根据pose_type_的值，选择订阅机器人位姿的不同消息类型（PoseStamped或Odometry）
   if (mp_.pose_type_ == POSE_STAMPED)
   {
     pose_sub_.reset(
         new message_filters::Subscriber<geometry_msgs::PoseStamped>(node_, "grid_map/pose", 25));
-
+// 使用消息过滤器（message_filters）来同步深度图像与位姿数据，并在接收到同步数据时触发回调函数进行处理
     sync_image_pose_.reset(new message_filters::Synchronizer<SyncPolicyImagePose>(
         SyncPolicyImagePose(100), *depth_sub_, *pose_sub_));
     sync_image_pose_->registerCallback(boost::bind(&GridMap::depthPoseCallback, this, _1, _2));
@@ -114,14 +114,19 @@ void GridMap::initMap(ros::NodeHandle &nh)
         SyncPolicyImageOdom(100), *depth_sub_, *odom_sub_));
     sync_image_odom_->registerCallback(boost::bind(&GridMap::depthOdomCallback, this, _1, _2));
   }
-
+ // 订阅点云图像，相机位姿为Odometry
   // use odometry and point cloud
   indep_odom_sub_ =
       node_.subscribe<nav_msgs::Odometry>("grid_map/odom", 10, &GridMap::odomCallback, this);
   indep_cloud_sub_ =
       node_.subscribe<sensor_msgs::PointCloud2>("grid_map/cloud", 10, &GridMap::cloudCallback, this);
-
+// 3.处理流程，应该只是针对深度图像
+  // occ_timer_：创建一个定时器，每隔0.05秒（即50毫秒）触发一次updateOccupancyCallback回调函数，用于更新栅格地图的占据状态。
+  // 这个定时器确针对的是深度图像的处理，保地图能够定期更新，以反映传感器数据的变化。
   occ_timer_ = node_.createTimer(ros::Duration(0.032), &GridMap::updateOccupancyCallback, this);
+  // 4.发布可视化占据栅格地图
+  // vis_timer_：创建另一个定时器，同样每隔0.05秒触发一次visCallback回调函数，用于更新地图的可视化数据。
+  // 这包括生成并发布栅格地图的可视化信息，使其可以在ROS的可视化工具（如RViz）中查看
   vis_timer_ = node_.createTimer(ros::Duration(0.125), &GridMap::visCallback, this);
   if (mp_.fading_time_ > 0)
     fading_timer_ = node_.createTimer(ros::Duration(0.5), &GridMap::fadingCallback, this);
@@ -459,7 +464,7 @@ void GridMap::moveRingBuffer()
   md_.ringbuffer_inf_upbound3i_ = ringbuffer_inf_upbound3i_new;
   md_.ringbuffer_inf_upbound3d_ = ringbuffer_inf_upbound3d_new;
 }
-
+// projectDepthImage()主要用于将 深度图像的有效像素点 => 世界坐标系下的三维点，并存储在md_.proj_points_中。处理方式可以选择滤波或者不滤波，滤波可以加快处理。
 void GridMap::projectDepthImage()
 {
   md_.proj_points_cnt_ = 0;
@@ -573,7 +578,9 @@ void GridMap::projectDepthImage()
   md_.last_camera_r_m_ = md_.camera_r_m_;
   md_.last_depth_image_ = md_.depth_image_;
 }
-
+// raycastProcess()射线投射算法，这种方法通过将射线经过的栅格标记为自由空间，而射线终止的栅格标记为占据空间。
+// 该算法首先利用以上思路标注经过栅格的count_hit_and_miss_和count_hit_，并且将修改的栅格id记录到cache_voxel_中；
+// 然后在局部地图（由mp_.local_update_range_确定）中计算occupancy_buffer_
 void GridMap::raycastProcess()
 {
   md_.cache_voxel_cnt_ = 0;
@@ -676,7 +683,9 @@ void GridMap::raycastProcess()
     ROS_WARN("Raycast time: t2-t1=%f, t3-t2=%f, pts_num=%d", (t2 - t1).toSec(), (t3 - t2).toSec(), pts_num);
   }
 }
-
+// clearAndInflateLocalMap()主要用于清理地图中无效数据，对障碍物进行膨胀，并为地图添加一个虚拟天花板
+// 该函数首先扩展范围的边界缓冲，是为了后面的障碍物膨胀。注意这里是对全局地图进行扩展
+// 并将额外扩展的新的栅格标记为未确定的空闲状态，最后的目的是完成occupancy_buffer_inflate_数组的填充，即对障碍物膨胀周围，以及天花板栅格都填充为1
 void GridMap::clearAndInflateLocalMap()
 {
   for (int i = 0; i < md_.cache_voxel_cnt_; ++i)
@@ -884,6 +893,7 @@ void GridMap::publishMapInflate()
       for (double yd = md_.ringbuffer_inf_lowbound3d_(1) + mp_.resolution_ / 2; yd < md_.ringbuffer_inf_upbound3d_(1); yd += mp_.resolution_)
         for (double zd = lbz + mp_.resolution_ / 2; zd < ubz; zd += mp_.resolution_)
         {
+          // 注释下面的if只保留内部的if可以实现360度建图
           Eigen::Vector3d relative_dir = (Eigen::Vector3d(xd, yd, zd) - md_.camera_pos_);
           if (heading.dot(relative_dir.normalized()) > 0.5)
           {

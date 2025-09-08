@@ -44,7 +44,7 @@ int main(int argc, char **argv)
 
   ros::init(argc, argv, "ego_planner_node");
   ros::NodeHandle nh("~");
-
+  // 创将初始化状态机
   EGOReplanFSM rebo_replan;
 
   rebo_replan.init(nh);

@@ -1,4 +1,3 @@
-
 #include <plan_manage/ego_replan_fsm.h>
 
 namespace ego_planner
@@ -13,7 +12,7 @@ namespace ego_planner
     flag_escape_emergency_ = true;
     mandatory_stop_ = false;
 
-    /*  fsm param  */
+    /*  fsm param  从参数服务器中读取多个参数，并将它们存储在相应的成员变量中  */
     nh.param("fsm/flight_type", target_type_, -1);
     nh.param("fsm/thresh_replan_time", replan_thresh_, -1.0);
     nh.param("fsm/planning_horizon", planning_horizen_, -1.0);
@@ -30,19 +29,21 @@ namespace ego_planner
       nh.param("fsm/waypoint" + to_string(i) + "_z", waypoints_[i][2], -1.0);
     }
 
-
-    /* initialize main modules */
+    /* initialize main modules可视化模块和规划管理器模块 */
     visualization_.reset(new PlanningVisualization(nh));
     planner_manager_.reset(new EGOPlannerManager);
+    // 初始化
     planner_manager_->initPlanModules(nh, visualization_);
 
     have_trigger_ = !flag_realworld_experiment_;
     no_replan_thresh_ = 0.5 * emergency_time_ * planner_manager_->pp_.max_vel_;
 
     /* callback */
+    // 100Hz调用execFSMCallback根据当前状态执行相应的操作
+    // 50Hz调用checkCollisionCallback检查碰撞
     exec_timer_ = nh.createTimer(ros::Duration(0.01), &EGOReplanFSM::execFSMCallback, this);
     safety_timer_ = nh.createTimer(ros::Duration(0.05), &EGOReplanFSM::checkCollisionCallback, this);
-
+    // 里程计订阅位置速度信息
     odom_sub_ = nh.subscribe("odom_world", 1, &EGOReplanFSM::odometryCallback, this);
     mandatory_stop_sub_ = nh.subscribe("mandatory_stop", 1, &EGOReplanFSM::mandatoryStopCallback, this);
 
@@ -57,7 +58,7 @@ namespace ego_planner
     data_disp_pub_ = nh.advertise<traj_utils::DataDisp>("planning/data_display", 100);
     heartbeat_pub_ = nh.advertise<std_msgs::Empty>("planning/heartbeat", 10);
     ground_height_pub_ = nh.advertise<std_msgs::Float64>("/ground_height_measurement", 10);
-
+    // 根据飞行模式，手动给点或者预设点
     if (target_type_ == TARGET_TYPE::MANUAL_TARGET)
     {
       waypoint_sub_ = nh.subscribe("/goal", 1, &EGOReplanFSM::waypointCallback, this);
@@ -80,6 +81,7 @@ namespace ego_planner
       cout << "Wrong target_type_ value! target_type_=" << target_type_ << endl;
   }
 
+  // & 引用传参，可以在另一个.cpp 文件中修改它的值，调用结束后参数会被更新。
   void EGOReplanFSM::execFSMCallback(const ros::TimerEvent &e)
   {
     exec_timer_.stop(); // To avoid blockage
@@ -229,6 +231,7 @@ namespace ego_planner
       flag_escape_emergency_ = false;
       break;
     }
+
     }
 
     data_disp_.header.stamp = ros::Time::now();
@@ -518,6 +521,7 @@ namespace ego_planner
       final_goal_ = next_wp;
 
       /*** display ***/
+      // 固定步长采样得到点序列
       constexpr double step_size_t = 0.1;
       int i_end = floor(planner_manager_->traj_.global_traj.duration / step_size_t);
       vector<Eigen::Vector3d> gloabl_traj(i_end);
@@ -610,7 +614,7 @@ namespace ego_planner
       wps_[i](2) = waypoints_[i][2];
     }
 
-    for (size_t i = 0; i < (size_t)waypoint_num_; i++)
+    for (size_t i = 0; i < (size_t)waypoint_num_; i++) //size t无符号整数类型
     {
       visualization_->displayGoalPoint(wps_[i], Eigen::Vector4d(0, 0.5, 0.5, 1), 0.3, i);
       ros::Duration(0.001).sleep();

@@ -37,6 +37,8 @@ namespace ego_planner
     ploy_traj_opt_->setDroneId(pp_.drone_id);
   }
 
+  /* flag_polyInit表示是否用多项式重新初始化轨迹，通常用于首次规划或有新目标点时，避免受到历史轨迹影响。；
+  flag_randomPolyTraj表示多项式初始化时是否引入随机扰动(中间点)，用于多次重规划失败后，尝试用不同初值增加成功概率。*/
   bool EGOPlannerManager::reboundReplan(
       const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel,
       const Eigen::Vector3d &start_acc, const Eigen::Vector3d &local_target_pt,
@@ -58,13 +60,13 @@ namespace ego_planner
     ploy_traj_opt_->setIfTouchGoal(touch_goal);
     double ts = pp_.polyTraj_piece_length / pp_.max_vel_;
 
-    poly_traj::MinJerkOpt initMJO;
+    poly_traj::MinJerkOpt initMJO;  //轨迹由多段五次多项式组成，每段包括时间和系数
     if (!computeInitState(start_pt, start_vel, start_acc, local_target_pt, local_target_vel,
                           flag_polyInit, flag_randomPolyTraj, ts, initMJO))
     {
       return false;
     }
-
+    // 提取约束点（在初始不避障局部路径上），get_cps_num_prePiece_获取每段多项式的控制点数量，默认是5
     Eigen::MatrixXd cstr_pts = initMJO.getInitConstraintPoints(ploy_traj_opt_->get_cps_num_prePiece_());
     vector<std::pair<int, int>> segments;
     if (ploy_traj_opt_->finelyCheckAndSetConstraintPoints(segments, initMJO, true) == PolyTrajOptimizer::CHK_RET::ERR)
@@ -73,7 +75,7 @@ namespace ego_planner
     }
 
     t_init = ros::Time::now() - t_start;
-
+    //  可视化初始轨迹的约束点
     std::vector<Eigen::Vector3d> point_set;
     for (int i = 0; i < cstr_pts.cols(); ++i)
       point_set.push_back(cstr_pts.col(i));
@@ -82,6 +84,7 @@ namespace ego_planner
     t_start = ros::Time::now();
 
     /*** STEP 2: OPTIMIZE ***/
+    
     bool flag_success = false;
     vector<vector<Eigen::Vector3d>> vis_trajs;
     poly_traj::MinJerkOpt best_MJO;
@@ -143,9 +146,10 @@ namespace ego_planner
     {
       poly_traj::Trajectory initTraj = initMJO.getTraj();
       int PN = initTraj.getPieceNum();
-      Eigen::MatrixXd all_pos = initTraj.getPositions();
-      Eigen::MatrixXd innerPts = all_pos.block(0, 1, 3, PN - 1);
+      Eigen::MatrixXd all_pos = initTraj.getPositions();  //每一段的起点以及最后终点
+      Eigen::MatrixXd innerPts = all_pos.block(0, 1, 3, PN - 1);  //内部点，不包括首尾
       Eigen::Matrix<double, 3, 3> headState, tailState;
+      //起点和终点的状态，包括位置、速度、加速度
       headState << initTraj.getJuncPos(0), initTraj.getJuncVel(0), initTraj.getJuncAcc(0);
       tailState << initTraj.getJuncPos(PN), initTraj.getJuncVel(PN), initTraj.getJuncAcc(PN);
       double final_cost;
@@ -188,6 +192,9 @@ namespace ego_planner
     return flag_success;
   }
 
+  // computeInitState函数仅用于生成初始轨迹（多项式轨迹的初值），并没有直接考虑避障。
+  // 避障是在后续的轨迹优化（如ploy_traj_opt_->optimizeTrajectory）过程中通过约束和代价函数实现的。
+  // computeInitState的作用是为优化器提供一个合理的初始轨迹，提高优化收敛速度和成功率。
   bool EGOPlannerManager::computeInitState(
       const Eigen::Vector3d &start_pt, const Eigen::Vector3d &start_vel, const Eigen::Vector3d &start_acc,
       const Eigen::Vector3d &local_target_pt, const Eigen::Vector3d &local_target_vel,
@@ -197,7 +204,7 @@ namespace ego_planner
 
     static bool flag_first_call = true;
 
-    if (flag_first_call || flag_polyInit) /*** case 1: polynomial initialization ***/
+    if (flag_first_call || flag_polyInit) /*** case 1: polynomial initialization 第一次调用或是使用多项式初始化轨迹***/
     {
       flag_first_call = false;
 
@@ -210,7 +217,8 @@ namespace ego_planner
       headState << start_pt, start_vel, start_acc;
       tailState << local_target_pt, local_target_vel, Eigen::Vector3d::Zero();
 
-      /* determined or random inner point */
+      /* determined or random inner point 
+      如果不需要随机扰动，则只生成一段，总时长为2秒；如果需要随机扰动，则在起点和终点之间生成一个随机中间点（扰动方向为水平和垂直），轨迹分为两段，每段1秒。*/
       if (!flag_randomPolyTraj)
       {
         if (innerPs.cols() != 0)
@@ -246,14 +254,16 @@ namespace ego_planner
       poly_traj::Trajectory initTraj = initMJO.getTraj();
 
       /* generate the real init trajectory */
+      // 根据起终点距离和设定的长度计算实际段数
       piece_nums = round((headState.col(0) - tailState.col(0)).norm() / pp_.polyTraj_piece_length);
       if (piece_nums < 2)
         piece_nums = 2;
       double piece_dur = init_of_init_totaldur / (double)piece_nums;
       piece_dur_vec.resize(piece_nums);
       piece_dur_vec = Eigen::VectorXd::Constant(piece_nums, ts);
-      innerPs.resize(3, piece_nums - 1);
+      innerPs.resize(3, piece_nums - 1);  //中间点数量
       int id = 0;
+      // 在初始轨迹的初始轨迹上均匀采样，作为新的中间点
       double t_s = piece_dur, t_e = init_of_init_totaldur - piece_dur / 2;
       for (double t = t_s; t < t_e; t += piece_dur)
       {
@@ -265,6 +275,7 @@ namespace ego_planner
         return false;
       }
       initMJO.reset(headState, tailState, piece_nums);
+      //生成最终的五次多项式初始轨迹
       initMJO.generate(innerPs, piece_dur_vec);
     }
     else /*** case 2: initialize from previous optimal trajectory ***/
@@ -276,13 +287,16 @@ namespace ego_planner
       }
 
       /* the trajectory time system is a little bit complicated... */
+      // 计算当前局部轨迹已执行的时间
       double passed_t_on_lctraj = ros::Time::now().toSec() - traj_.local_traj.start_time;
+      // 计算当前局部轨迹结束还需的时间
       double t_to_lc_end = traj_.local_traj.duration - passed_t_on_lctraj;
       if (t_to_lc_end < 0)
       {
         ROS_INFO("t_to_lc_end < 0, exit and wait for another call.");
         return false;
       }
+      // 计算到局部目标点（重规划后）的总时间
       double t_to_lc_tgt = t_to_lc_end +
                            (traj_.global_traj.glb_t_of_lc_tgt - traj_.global_traj.last_glb_t_of_lc_tgt);
       int piece_nums = ceil((start_pt - local_target_pt).norm() / pp_.polyTraj_piece_length);
@@ -300,10 +314,12 @@ namespace ego_planner
       {
         if (t < t_to_lc_end)
         {
+          // 从当前局部轨迹采样
           innerPs.col(i) = traj_.local_traj.traj.getPos(t + passed_t_on_lctraj);
         }
         else if (t <= t_to_lc_tgt)
         {
+          // 从全局轨迹采样
           double glb_t = t - t_to_lc_end + traj_.global_traj.last_glb_t_of_lc_tgt - traj_.global_traj.global_start_time;
           innerPs.col(i) = traj_.global_traj.traj.getPos(glb_t);
         }
@@ -329,9 +345,9 @@ namespace ego_planner
   {
     double t;
     touch_goal = false;
-
+    // 从上一次的局部目标点开始寻找
     traj_.global_traj.last_glb_t_of_lc_tgt = traj_.global_traj.glb_t_of_lc_tgt;
-
+    // 全局轨迹上寻找略远于规划界限的点
     double t_step = planning_horizen / 20 / pp_.max_vel_;
     // double dist_min = 9999, dist_min_t = 0.0;
     for (t = traj_.global_traj.glb_t_of_lc_tgt;
@@ -348,14 +364,14 @@ namespace ego_planner
         break;
       }
     }
-
+    // 否则，说明规划界限内没有点，直接取最后一个点
     if ((t - traj_.global_traj.global_start_time) >= traj_.global_traj.duration - 1e-5) // Last global point
     {
       local_target_pos = global_end_pt;
       traj_.global_traj.glb_t_of_lc_tgt = traj_.global_traj.global_start_time + traj_.global_traj.duration;
-      touch_goal = true;
+      touch_goal = true; //直接到全局终点为局部目标点
     }
-
+    // 如果局部目标点与全局终点距离小于最大速度和加速度的比值，则将局部速度置为零，否则使用全局轨迹速度
     if ((global_end_pt - local_target_pos).norm() < (pp_.max_vel_ * pp_.max_vel_) / (2 * pp_.max_acc_))
     {
       local_target_vel = Eigen::Vector3d::Zero();
@@ -433,7 +449,7 @@ namespace ego_planner
     headState << start_pos, start_vel, start_acc;
     tailState << waypoints.back(), end_vel, end_acc;
     Eigen::MatrixXd innerPts;
-
+    // 如果航点数量大于1，则生成矩阵存贮
     if (waypoints.size() > 1)
     {
 
@@ -450,12 +466,12 @@ namespace ego_planner
         ROS_ERROR("innerPts.size() != 0");
       }
     }
-
+    // 传递初始和终止状态，以及航点数量
     globalMJO.reset(headState, tailState, waypoints.size());
 
     double des_vel = pp_.max_vel_ / 1.5;
     Eigen::VectorXd time_vec(waypoints.size());
-
+    // 时间分配
     for (int j = 0; j < 2; ++j)
     {
       for (size_t i = 0; i < waypoints.size(); ++i)
@@ -463,7 +479,7 @@ namespace ego_planner
         time_vec(i) = (i == 0) ? (waypoints[0] - start_pos).norm() / des_vel
                                : (waypoints[i] - waypoints[i - 1]).norm() / des_vel;
       }
-
+      // 生成全局轨迹，生成一条五次多项式轨迹，没有中间点近似为直线
       globalMJO.generate(innerPts, time_vec);
 
       if (globalMJO.getTraj().getMaxVelRate() < pp_.max_vel_ ||

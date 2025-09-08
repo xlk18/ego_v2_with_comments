@@ -47,7 +47,7 @@ namespace ego_planner
       REPLAN_TRAJ,
       EXEC_TRAJ,
       EMERGENCY_STOP,
-      SEQUENTIAL_START
+      SEQUENTIAL_START,
     };
     enum TARGET_TYPE
     {
@@ -72,7 +72,7 @@ namespace ego_planner
     bool enable_fail_safe_;
     bool enable_ground_height_measurement_;
     bool flag_escape_emergency_;
-
+    
     bool have_trigger_, have_target_, have_odom_, have_new_target_, have_recv_pre_agent_, touch_goal_, mandatory_stop_;
     FSM_EXEC_STATE exec_state_;
     int continously_called_times_{0};
@@ -119,6 +119,7 @@ namespace ego_planner
 
     /* ground height measurement */
     bool measureGroundHeight(double &height);
+
   };
 
 } // namespace ego_planner

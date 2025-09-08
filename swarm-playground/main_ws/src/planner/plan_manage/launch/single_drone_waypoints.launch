@@ -40,14 +40,14 @@
         <arg name="target0_x" default="0.0"/>
         <arg name="target0_y" default="8.0"/>
         <arg name="target0_z" default="1.0"/>
-        <arg name="target1_x" default="8.0"/>
-        <arg name="target1_y" default="0.0"/>
+        <arg name="target1_x" default="0.0"/>
+        <arg name="target1_y" default="10.0"/>
         <arg name="target1_z" default="1.0"/>
         <arg name="target2_x" default="0.0"/>
-        <arg name="target2_y" default="-8.0"/>
+        <arg name="target2_y" default="8.0"/>
         <arg name="target2_z" default="1.0"/>
-        <arg name="target3_x" default="-8.0"/>
-        <arg name="target3_y" default="0.0"/>
+        <arg name="target3_x" default="0.0"/>
+        <arg name="target3_y" default="10.0"/>
         <arg name="target3_z" default="1.0"/>
     </include>
 </launch>

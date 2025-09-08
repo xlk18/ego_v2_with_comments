@@ -730,6 +730,7 @@ namespace poly_traj
     public:
         // The size of A, as well as the lower/upper
         // banded width p/q are needed
+        // 分配带状矩阵存储内存
         inline void create(const int &n, const int &p, const int &q)
         {
             // In case of re-creating before destroying
@@ -1145,7 +1146,9 @@ namespace poly_traj
             // gdT.resize(6 * N);
             return;
         }
-
+        // 这个generate函数只根据给定的起点、终点状态和中间点，直接解多项式系数，不涉及jerk等最优目标的优化。
+        // 如果inPs为空，只考虑首尾状态，生成一条五次多项式轨迹；如果inPs非空，则插值经过中间点。
+        // 并没有做最小化jerk等目标的优化，只是解满足约束的多项式系数。
         inline void generate(const Eigen::MatrixXd &inPs,
                              const Eigen::VectorXd &ts)
         {
@@ -1158,7 +1161,7 @@ namespace poly_traj
                 double t3_inv = t2_inv * t1_inv;
                 double t4_inv = t2_inv * t2_inv;
                 double t5_inv = t4_inv * t1_inv;
-                CoefficientMat coeffMatReversed;
+                CoefficientMat coeffMatReversed;    //3*6矩阵
                 coeffMatReversed.col(5) = 0.5 * (tailPVA.col(2) - headPVA.col(2)) * t3_inv -
                                           3.0 * (headPVA.col(1) + tailPVA.col(1)) * t4_inv +
                                           6.0 * (tailPVA.col(0) - headPVA.col(0)) * t5_inv;
@@ -1176,14 +1179,15 @@ namespace poly_traj
             else
             {
                 T1 = ts;
-                T2 = T1.cwiseProduct(T1);
+                T2 = T1.cwiseProduct(T1);   //按元素乘积
                 T3 = T2.cwiseProduct(T1);
                 T4 = T2.cwiseProduct(T2);
                 T5 = T4.cwiseProduct(T1);
 
-                A.reset();
-                b.setZero();
-
+                A.reset();  // 清零带状矩阵A
+                b.setZero();    // 清零右端项b
+                // 初始点和终点p,v,a约束；中间航点p,v,a,j,s连续约束以及p位置约束
+                // 6*N个未知数，6*N个方程
                 A(0, 0) = 1.0;
                 A(1, 1) = 1.0;
                 A(2, 2) = 2.0;
@@ -1196,34 +1200,34 @@ namespace poly_traj
                     A(6 * i + 3, 6 * i + 3) = 6.0;
                     A(6 * i + 3, 6 * i + 4) = 24.0 * T1(i);
                     A(6 * i + 3, 6 * i + 5) = 60.0 * T2(i);
-                    A(6 * i + 3, 6 * i + 9) = -6.0;
+                    A(6 * i + 3, 6 * i + 9) = -6.0; //jerk连续约束
                     A(6 * i + 4, 6 * i + 4) = 24.0;
                     A(6 * i + 4, 6 * i + 5) = 120.0 * T1(i);
-                    A(6 * i + 4, 6 * i + 10) = -24.0;
+                    A(6 * i + 4, 6 * i + 10) = -24.0;   //sanp连续约束
                     A(6 * i + 5, 6 * i) = 1.0;
                     A(6 * i + 5, 6 * i + 1) = T1(i);
                     A(6 * i + 5, 6 * i + 2) = T2(i);
                     A(6 * i + 5, 6 * i + 3) = T3(i);
                     A(6 * i + 5, 6 * i + 4) = T4(i);
-                    A(6 * i + 5, 6 * i + 5) = T5(i);
+                    A(6 * i + 5, 6 * i + 5) = T5(i);    //第i段末位置约束
                     A(6 * i + 6, 6 * i) = 1.0;
                     A(6 * i + 6, 6 * i + 1) = T1(i);
                     A(6 * i + 6, 6 * i + 2) = T2(i);
                     A(6 * i + 6, 6 * i + 3) = T3(i);
                     A(6 * i + 6, 6 * i + 4) = T4(i);
-                    A(6 * i + 6, 6 * i + 5) = T5(i);
-                    A(6 * i + 6, 6 * i + 6) = -1.0;
+                    A(6 * i + 6, 6 * i + 5) = T5(i);    //第i段末位置
+                    A(6 * i + 6, 6 * i + 6) = -1.0; //第i+1段初位置
                     A(6 * i + 7, 6 * i + 1) = 1.0;
                     A(6 * i + 7, 6 * i + 2) = 2 * T1(i);
                     A(6 * i + 7, 6 * i + 3) = 3 * T2(i);
                     A(6 * i + 7, 6 * i + 4) = 4 * T3(i);
-                    A(6 * i + 7, 6 * i + 5) = 5 * T4(i);
-                    A(6 * i + 7, 6 * i + 7) = -1.0;
+                    A(6 * i + 7, 6 * i + 5) = 5 * T4(i);    //第i段末速度
+                    A(6 * i + 7, 6 * i + 7) = -1.0; //第i+1段初速度
                     A(6 * i + 8, 6 * i + 2) = 2.0;
                     A(6 * i + 8, 6 * i + 3) = 6 * T1(i);
                     A(6 * i + 8, 6 * i + 4) = 12 * T2(i);
-                    A(6 * i + 8, 6 * i + 5) = 20 * T3(i);
-                    A(6 * i + 8, 6 * i + 8) = -2.0;
+                    A(6 * i + 8, 6 * i + 5) = 20 * T3(i);   //第i段末加速度
+                    A(6 * i + 8, 6 * i + 8) = -2.0; //第i+1段初加速度
 
                     b.row(6 * i + 5) = inPs.col(i).transpose();
                 }
@@ -1233,16 +1237,16 @@ namespace poly_traj
                 A(6 * N - 3, 6 * N - 4) = T2(N - 1);
                 A(6 * N - 3, 6 * N - 3) = T3(N - 1);
                 A(6 * N - 3, 6 * N - 2) = T4(N - 1);
-                A(6 * N - 3, 6 * N - 1) = T5(N - 1);
+                A(6 * N - 3, 6 * N - 1) = T5(N - 1);    //第N段末位置
                 A(6 * N - 2, 6 * N - 5) = 1.0;
                 A(6 * N - 2, 6 * N - 4) = 2 * T1(N - 1);
                 A(6 * N - 2, 6 * N - 3) = 3 * T2(N - 1);
                 A(6 * N - 2, 6 * N - 2) = 4 * T3(N - 1);
-                A(6 * N - 2, 6 * N - 1) = 5 * T4(N - 1);
+                A(6 * N - 2, 6 * N - 1) = 5 * T4(N - 1);    //第N段末速度
                 A(6 * N - 1, 6 * N - 4) = 2;
                 A(6 * N - 1, 6 * N - 3) = 6 * T1(N - 1);
                 A(6 * N - 1, 6 * N - 2) = 12 * T2(N - 1);
-                A(6 * N - 1, 6 * N - 1) = 20 * T3(N - 1);
+                A(6 * N - 1, 6 * N - 1) = 20 * T3(N - 1);   //第N段末加速度
 
                 b.row(6 * N - 3) = tailPVA.col(0).transpose();
                 b.row(6 * N - 2) = tailPVA.col(1).transpose();
@@ -1298,7 +1302,7 @@ namespace poly_traj
         inline Trajectory getTraj(void) const
         {
             Trajectory traj;
-            traj.reserve(N);
+            traj.reserve(N);    //分配空间
             for (int i = 0; i < N; i++)
             {
                 traj.emplace_back(T1(i), b.block<6, 3>(6 * i, 0).transpose().rowwise().reverse());
@@ -1314,15 +1318,15 @@ namespace poly_traj
             double s1, s2, s3, s4, s5;
             double step;
             int i_dp = 0;
-
+            // 遍历每一段轨迹
             for (int i = 0; i < N; ++i)
             {
+                // 取出第i段轨迹的系数
                 const auto &c = b.block<6, 3>(i * 6, 0);
                 step = T1(i) / K;
                 s1 = 0.0;
                 double t = 0;
-                // innerLoop = K;
-
+                // innerLoop = K;每一段轨迹采样k个点，加最后一段终点
                 for (int j = 0; j <= K; ++j)
                 {
                     s2 = s1 * s1;
@@ -1334,6 +1338,7 @@ namespace poly_traj
                     pts.col(i_dp) = pos;
 
                     s1 += step;
+                    // 这里的判断是为了避免最后一个两端轨迹连接处重复采样
                     if (j != K || (j == K && i == N - 1))
                     {
                         ++i_dp;

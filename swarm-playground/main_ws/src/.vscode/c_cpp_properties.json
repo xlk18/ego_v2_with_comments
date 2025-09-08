@@ -1,0 +1,45 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/devel/include/**",
+        "/opt/ros/noetic/include/**",
+        "/home/yyf/catkin_ws/src/time_optimal_planner/dcbf_optimal/include/**",
+        "/home/yyf/catkin_ws/src/time_optimal_planner/plan_manage/DecompROS/decomp_ros_utils/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/planner/drone_detect/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/planner/plan_manage/include/**",
+        "/home/yyf/catkin_ws/src/time_optimal_planner/mapping/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/uav_simulator/mockamap/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/planner/path_searching/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/planner/plan_env/include/**",
+        "/home/yyf/catkin_ws/src/time_optimal_planner/plan_manage/plan_manage/include/**",
+        "/home/yyf/catkin_ws/src/time_optimal_planner/poly_traj/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/Utils/pose_utils/include/**",
+        "/home/yyf/catkin_ws/src/time_optimal_planner/quadrotor_feedback_controller/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/Utils/quadrotor_msgs/include/**",
+        "/home/yyf/catkin_ws/src/quarotor_feedback_controller-hover_simulator/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/Utils/selected_points_publisher/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/uav_simulator/so3_control/include/**",
+        "/home/yyf/catkin_ws/src/time_optimal_planner/uav_simulator/so3_controller/include/**",
+        "/home/yyf/catkin_ws/src/time_optimal_planner/uav_simulator/so3_quadrotor/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/uav_simulator/so3_quadrotor_simulator/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/planner/swarm_bridge/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/planner/traj_opt/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/planner/traj_utils/include/**",
+        "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/Utils/uav_utils/include/**",
+        "/home/yyf/catkin_ws/src/wpr_simulation/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
