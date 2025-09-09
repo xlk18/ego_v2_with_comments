@@ -1285,13 +1285,14 @@ namespace ego_planner
     for (int i = 0; i < N; ++i)
     {
 
-      const Eigen::Matrix<double, 6, 3> &c = jerkOpt_.get_b().block<6, 3>(i * 6, 0);
-      step = jerkOpt_.get_T1()(i) / K;
+      const Eigen::Matrix<double, 6, 3> &c = jerkOpt_.get_b().block<6, 3>(i * 6, 0);   // 获取第i段的多项式系数
+      step = jerkOpt_.get_T1()(i) / K;  // 计算采样步长，K是每段采样点数
       s1 = 0.0;
       // innerLoop = K;
 
       for (int j = 0; j <= K; ++j)
       {
+        //各多项式系数
         s2 = s1 * s1;
         s3 = s2 * s1;
         s4 = s2 * s2;

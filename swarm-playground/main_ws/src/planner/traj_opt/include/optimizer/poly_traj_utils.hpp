@@ -1284,6 +1284,7 @@ namespace poly_traj
         //     return gdT(i);
         // }
 
+        // jerk平方积分求和
         inline double getTrajJerkCost() const
         {
             double objective = 0.0;
@@ -1366,9 +1367,9 @@ namespace poly_traj
 
             gdT.setZero();
             gdC.setZero();
-            cost = getTrajJerkCost();
-            addGradJbyT(gdT);
-            addGradJbyC(gdC);
+            cost = getTrajJerkCost(); //计算jerk平方积分和
+            addGradJbyT(gdT);   //计算cost对时间分配时间的梯度
+            addGradJbyC(gdC);   //计算cost对多项式系数的梯度
         }
 
         template <typename EIGENVEC, typename EIGENMAT>
