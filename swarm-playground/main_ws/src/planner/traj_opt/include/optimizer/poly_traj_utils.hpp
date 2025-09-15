@@ -1142,7 +1142,7 @@ namespace poly_traj
             T1.resize(N);
             A.create(6 * N, 6, 6);
             b.resize(6 * N, 3);
-            gdC.resize(6 * N, 3);
+            gdC.resize(6 * N, 3);//对系数的梯度，一段6个系数，N段，3个维度
             // gdT.resize(6 * N);
             return;
         }

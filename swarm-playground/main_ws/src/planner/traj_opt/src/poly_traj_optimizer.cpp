@@ -799,7 +799,7 @@ namespace ego_planner
         min_product = product;
       }
     }
-    if (min_product < 0.87) // 30 degree
+    if (min_product < 0.87) // 大于 30 degree
       return false;
 
     // criterion 3
@@ -831,6 +831,7 @@ namespace ego_planner
     }
 
     // all the criterion passed
+    // 轨迹足够平滑，迭代次数足够
     return true;
   }
 
@@ -1311,7 +1312,7 @@ namespace ego_planner
 
         omg = (j == 0 || j == K) ? 0.5 : 1.0;
 
-        cps_.points.col(i_dp) = pos;
+        cps_.points.col(i_dp) = pos;  //位置变了，但(p,v)不变
 
         // collision
         if (obstacleGradCostP(i_dp, pos, gradp, costp))
@@ -1344,7 +1345,7 @@ namespace ego_planner
           gradViolaVc = beta1 * gradv.transpose();
           gradViolaVt = alpha * gradv.transpose() * acc;
           jerkOpt_.get_gdC().block<6, 3>(i * 6, 0) += omg * step * gradViolaVc;
-          gdT(i) += omg * (costv / K + step * gradViolaVt);
+          gdT(i) += omg * (costv / K + step * gradViolaVt);// 代价函数有两种对时间T的依赖，一种是积分化为离散求和对步长的，一种是直接的代价函数对T的依赖
           costs(2) += omg * step * costv;
         }
 
@@ -1369,7 +1370,7 @@ namespace ego_planner
         // printf("L\n");
 
         s1 += step;
-        if (j != K || (j == K && i == N - 1))
+        if (j != K || (j == K && i == N - 1)) //
         {
           ++i_dp;
         }
@@ -1382,6 +1383,7 @@ namespace ego_planner
     Eigen::MatrixXd gdp;
     double var;
     // lengthVarianceWithGradCost2p(cps_.points, K, gdp, var);
+    // 使每段的长度相近
     distanceSqrVarianceWithGradCost2p(cps_.points, gdp, var);
 
     i_dp = 0;
@@ -1407,7 +1409,7 @@ namespace ego_planner
         gradViolaPt = alpha * gdp.col(i_dp).transpose() * vel;
         jerkOpt_.get_gdC().block<6, 3>(i * 6, 0) += omg * gradViolaPc;
         gdT(i) += omg * (gradViolaPt);
-
+        
         s1 += step;
         if (j != K || (j == K && i == N - 1))
         {
@@ -1535,6 +1537,7 @@ namespace ego_planner
     return ret;
   }
 
+  //如果速度超过了最大速度，施加一个约束
   bool PolyTrajOptimizer::feasibilityGradCostV(const Eigen::Vector3d &v,
                                                Eigen::Vector3d &gradv,
                                                double &costv)
@@ -1549,6 +1552,7 @@ namespace ego_planner
     return false;
   }
 
+  //如果加速度超过了最大速度，施加一个约束
   bool PolyTrajOptimizer::feasibilityGradCostA(const Eigen::Vector3d &a,
                                                Eigen::Vector3d &grada,
                                                double &costa)
@@ -1563,6 +1567,7 @@ namespace ego_planner
     return false;
   }
 
+  //如果加加速度超过了最大速度，施加一个约束
   bool PolyTrajOptimizer::feasibilityGradCostJ(const Eigen::Vector3d &j,
                                                Eigen::Vector3d &gradj,
                                                double &costj)
@@ -1582,10 +1587,10 @@ namespace ego_planner
                                                             double &var)
   {
     int N = ps.cols() - 1;
-    Eigen::MatrixXd dps = ps.rightCols(N) - ps.leftCols(N);
-    Eigen::VectorXd dsqrs = dps.colwise().squaredNorm().transpose();
+    Eigen::MatrixXd dps = ps.rightCols(N) - ps.leftCols(N);//计算相邻控制点之间的差值，3xN
+    Eigen::VectorXd dsqrs = dps.colwise().squaredNorm().transpose();//每段的平方和，Nx1
     // double dsqrsum = dsqrs.sum();
-    double dquarsum = dsqrs.squaredNorm();
+    double dquarsum = dsqrs.squaredNorm();//所有段的平方和的平方和
     // double dsqrmean = dsqrsum / N;
     double dquarmean = dquarsum / N;
     var = wei_sqrvar_ * (dquarmean);
