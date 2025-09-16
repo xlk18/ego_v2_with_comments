@@ -432,6 +432,23 @@ namespace poly_traj
             return totalDuration;
         }
 
+        //计算轨迹长度
+        inline double getLength(double time) const
+        {
+            double Length = 0.0;
+            double totalDuration = getTotalDuration();
+            if (time > totalDuration)
+            {
+                return false;
+            }
+            double dt = 0.01;
+            for (double t = 0.0; t < time; t+=dt)
+            {
+                Length += getVel(t).norm() * dt;
+            }
+            return Length;
+        }
+
         inline Eigen::MatrixXd getPositions() const
         {
             int N = getPieceNum();
