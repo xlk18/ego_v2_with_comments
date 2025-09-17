@@ -6,7 +6,14 @@
 #include <visualization_msgs/Marker.h>
 #include <ros/ros.h>
 #include "PointMassPathSearching.h"
-
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <chrono>
+#include <deque>
+#include <nav_msgs/Path.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <Eigen/Dense>
 using namespace Eigen;
 
 ros::Publisher pos_cmd_pub;
@@ -31,7 +38,8 @@ std::unique_ptr<PointMassPathSearching> point_mass_planner_;  // 质点规划器
 Trajectories::Trajectories point_mass_trajectory_;     // 存储质点轨迹
 bool point_mass_trajectory_ready_ = false;             // 质点轨迹是否准备好
 double point_mass_traj_duration_ = 0.0;               // 质点轨迹总时长
- bool fix_replan = false;// Perform a full search, not a fixed replan
+std::vector<Eigen::Vector3d> point_mass_positions_;          
+std::vector<Eigen::Vector3d> point_mass_velocities_; 
 // 航点相关参数
 double waypoint_spacing_;                       // 航点间距（米）
 int min_waypoints_ = 3;                               // 最小航点数
@@ -44,7 +52,7 @@ void heartbeatCallback(std_msgs::EmptyPtr msg)
   heartbeat_time_ = ros::Time::now();
 }
 
-// 新增函数：根据轨迹长度计算航点数量
+// 根据轨迹长度计算航点数量 
 int calculateOptimalWaypointCount(const double &traj_length)
 {
     double traj_length = traj_length;
@@ -55,7 +63,7 @@ int calculateOptimalWaypointCount(const double &traj_length)
     return waypoint_count;
 }
 
-// 新增函数：根据距离返回在轨迹上对应的时刻
+// 根据距离返回在轨迹上对应的时刻 
 double findTimeAtDistance(const boost::shared_ptr<poly_traj::Trajectory> &trajectory, double target_dist, double total_len)
 {
     double total_duration = trajectory.getTotalDuration();
@@ -85,7 +93,7 @@ double findTimeAtDistance(const boost::shared_ptr<poly_traj::Trajectory> &trajec
     return t_guess;
 }
 
-// 新增函数：从原始轨迹采样航点
+// 从原始轨迹采样航点 
 std::deque<waypoint> sampleTrajectoryWaypoints(const boost::shared_ptr<poly_traj::Trajectory> &trajectory, int num_samples)
 {
   std::deque<waypoint> point_mass_waypoints_; 
@@ -125,114 +133,18 @@ std::deque<waypoint> sampleTrajectoryWaypoints(const boost::shared_ptr<poly_traj
   return point_mass_waypoints_
 }
 
-// 新增函数：将OptimalNode转换为Trajectories::Trajectories
-bool convertOptimalNodesToTrajectories(const std::vector<OptimalNode>& optimal_nodes)
+void getpointMassCmd(const std::deque<std::vector<double>> &trajectory)
 {
-    if (optimal_nodes.size() < 2) {
-        ROS_ERROR("[traj_server] Insufficient optimal nodes");
-        return false;
-    }
-    
-    point_mass_trajectory_.clear();
-    point_mass_traj_duration_ = optimal_nodes.back().g_from_begin;
-    
-    for (size_t i = 0; i < optimal_nodes.size(); ++i) {
-        Trajectories::TrajectoryPoint traj_point;
-        
-        traj_point.time = optimal_nodes[i].g_from_begin;
-        traj_point.position = optimal_nodes[i].position;
-        traj_point.velocity = optimal_nodes[i].velocity;
-        
-        // 计算加速度
-        if (i < optimal_nodes.size() - 1) {
-            double dt = optimal_nodes[i+1].g_from_begin - optimal_nodes[i].g_from_begin;
-            if (dt > 1e-6) {
-                traj_point.acceleration = (optimal_nodes[i+1].velocity - optimal_nodes[i].velocity) / dt;
-            } else {
-                traj_point.acceleration = Eigen::Vector3d::Zero();
-            }
-        } else {
-            traj_point.acceleration = Eigen::Vector3d::Zero();
-        }
-        
-        point_mass_trajectory_.addPoint(traj_point);
-    }
-    
-    ROS_INFO("[traj_server] Converted %lu optimal nodes to trajectory (duration: %.2fs)", 
-             optimal_nodes.size(), point_mass_traj_duration_);
-    
-    return true;
-}
+  point_mass_positions_.clear();
+  point_mass_velocities_.clear();
+  size_t num = trajectory.size();
+  point_mass_positions_.resize(num); 
+  point_mass_velocities_.resize(num);
+  for (const auto& point : trajectory) {
+    point_mass_positions_.push_back(point.at(0), point.at(1), point.at(2));
+    point_mass_positions_.push_back(point.at(3), point.at(4), point.at(5));
+  }
 
-// 新增函数：使用质点规划器优化轨迹
-bool optimizeTrajectoryWithPointMass(const boost::shared_ptr<poly_traj::Trajectory>& original_traj)
-{
-    try {
-        Eigen::Vector4d start_attitude(1, 0, 0, 0);  // 单位四元数
-        
-        // 调用质点规划器
-        auto optimal_nodes = point_mass_planner_->solve(waypoints, start_pos, start_vel, start_attitude, true);
-        
-        if (optimal_nodes.empty()) {
-            ROS_WARN("[traj_server] Point mass optimization failed");
-            return false;
-        }
-        
-        // 转换为Trajectories格式
-        return convertOptimalNodesToTrajectories(optimal_nodes);
-        
-    } catch (const std::exception& e) {
-        ROS_ERROR("[traj_server] Trajectory optimization failed: %s", e.what());
-        return false;
-    }
-}
-
-// 新增函数：从质点轨迹插值获取状态
-bool interpolateTrajectoryState(double t, Eigen::Vector3d& pos, Eigen::Vector3d& vel, 
-                               Eigen::Vector3d& acc, Eigen::Vector3d& jerk)
-{
-    if (!point_mass_trajectory_ready_ || point_mass_trajectory_.empty()) {
-        return false;
-    }
-    
-    // 边界检查
-    if (t <= 0.0) {
-        auto first_point = point_mass_trajectory_.getPoint(0);
-        pos = first_point.position;
-        vel = first_point.velocity;
-        acc = first_point.acceleration;
-        jerk = Eigen::Vector3d::Zero();
-        return true;
-    }
-    
-    if (t >= point_mass_traj_duration_) {
-        auto last_point = point_mass_trajectory_.getPoint(point_mass_trajectory_.size() - 1);
-        pos = last_point.position;
-        vel = last_point.velocity;
-        acc = last_point.acceleration;
-        jerk = Eigen::Vector3d::Zero();
-        return true;
-    }
-    
-    // 线性插值
-    for (size_t i = 0; i < point_mass_trajectory_.size() - 1; ++i) {
-        auto point1 = point_mass_trajectory_.getPoint(i);
-        auto point2 = point_mass_trajectory_.getPoint(i + 1);
-        
-        if (t >= point1.time && t <= point2.time) {
-            double dt = point2.time - point1.time;
-            double ratio = (t - point1.time) / dt;
-            
-            pos = point1.position + ratio * (point2.position - point1.position);
-            vel = point1.velocity + ratio * (point2.velocity - point1.velocity);
-            acc = point1.acceleration + ratio * (point2.acceleration - point1.acceleration);
-            jerk = Eigen::Vector3d::Zero();  // 简化处理
-            
-            return true;
-        }
-    }
-    
-    return false;
 }
 
 void polyTrajCallback(traj_utils::PolyTrajPtr msg)
@@ -272,36 +184,33 @@ void polyTrajCallback(traj_utils::PolyTrajPtr msg)
     double traj_length_ = traj_->getLength(traj_duration_);
     int waypoint_num = calculateOptimalWaypointCount(traj_length_);
     try {
-        point_mass_planner_ = std::make_unique<PointMassPathSearching>(
-            max_acc_, max_acc_, max_acc_,
-            -max_acc_, -max_acc_, -max_acc_,
-            waypoint_num
-        );
-    } catch (const std::exception& e) {
-        ROS_ERROR("[traj_server] Failed to initialize point mass planner: %s", e.what());
-        use_time_reallocation_ = false;
-    }
-    std::deque<waypoint> point_mass_waypoints_ = sampleTrajectoryWaypoints(traj_, waypoint_num);
-
-    bool success = optimizeTrajectoryWithPointMass(traj_);
-    
-    if (success) {
+      point_mass_planner_ = std::make_unique<PointMassPathSearching>(
+        max_acc_, max_acc_, max_acc_,
+        -max_acc_, -max_acc_, -max_acc_,
+        waypoint_num
+      );
+      std::deque<waypoint> point_mass_waypoints_ = sampleTrajectoryWaypoints(traj_, waypoint_num);  
+      Eigen::Vector3d start_pos = traj_->getPos(0.0);
+      Eigen::Vector3d start_vel = traj_->getVel(0.0);
+      Eigen::Vector4d start_attitude(1, 0, 0, 0);
+      point_mass_planner_->solve(point_mass_waypoints_, start_pos, start_vel, start_attitude, true, false);
+      if (!point_mass_planner_->wayPoint_Optimal_VelocityVec_.empty())
+      {
+        point_mass_planner_->drawTrajectory(0.01);
+        point_mass_planner_->getPointMassTrajectory(&point_mass_trajectory_);
+        std::deque<std::vector<double>> trajectory = point_mass_trajectory_.get_full_trajectories_vec();
+        getpointMassCmd(trajectory);
         point_mass_trajectory_ready_ = true;
-        ROS_INFO("[traj_server] Point mass trajectory optimization completed. New duration: %.2fs", 
-                  point_mass_traj_duration_);
-    } else {
-        ROS_WARN("[traj_server] Point mass trajectory optimization failed, using original trajectory");
+      }else{
         point_mass_trajectory_ready_ = false;
+      }
+    }catch(const std::exception& e){
+      std::cerr << e.what() << '\n';
+      use_time_reallocation_ = false;
     }
-  } else {
+  }else {
     point_mass_trajectory_ready_ = false;
-    if (use_time_reallocation_) {
-        ROS_WARN("[traj_server] Point mass planner not initialized");
-    } else {
-        ROS_INFO("[traj_server] Using original trajectory (point mass optimization disabled)");
-    }
   }
-
   start_time_ = msg->start_time;
   traj_id_ = msg->traj_id;
   receive_traj_ = true;

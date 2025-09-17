@@ -490,7 +490,7 @@ void PointMassPathSearching::getWaypointDistance() {
 
 std::vector<OptimalNode>
 PointMassPathSearching::solve(std::deque<waypoint> waypointVec, const Eigen::Vector3d &currentPosition,
-                              const Eigen::Vector3d &currentVelcity, const Eigen::Vector4d &currentAttitude, bool is_fix) {
+                              const Eigen::Vector3d &currentVelcity, const Eigen::Vector4d &currentAttitude, bool touch_goal, bool is_fix) {
 
     if(is_fix){
         current_velcity_ = currentVelcity;
@@ -518,7 +518,7 @@ PointMassPathSearching::solve(std::deque<waypoint> waypointVec, const Eigen::Vec
         }
         getWaypointDistance();
     }
-        preSearch();
+        preSearch(touch_goal);
 //        cleanPreSample();
 //        sampleVelocity(currentVelcity);
 //        shortestPathSearching();
@@ -547,7 +547,7 @@ void PointMassPathSearching::sampleVelocity(Eigen::Vector3d curVelocity) {
             std::vector<node>{node(false, INF, Eigen::Vector3d{0, 0, 0}, "end", static_cast<int>(distance_between_waypoint_.size()))});
 }
 
-void PointMassPathSearching::preSearch() {
+void PointMassPathSearching::preSearch(bool touch_goal) {
     Velocity_Network_.emplace_back(std::vector<node>{node(false, 0, current_velcity_, "start", 0)});
     int wp_num = static_cast<int>(waypoints_.size()) - 2;
     for (int i = 0; i < wp_num; i++) {
@@ -559,8 +559,21 @@ void PointMassPathSearching::preSearch() {
         }
         instance->erase(instance->begin());
     }
-    Velocity_Network_.emplace_back(
+    if (touch_goal)
+    {
+        Velocity_Network_.emplace_back(
             std::vector<node>{node(false, INF, Eigen::Vector3d{0, 0, 0}, "end", static_cast<int>(distance_between_waypoint_.size()))});
+    }else{
+        int end_wp_idx = static_cast<int>(distance_between_waypoint_.size());
+        Velocity_Network_.emplace_back(std::vector<node>{node(false, INF, Eigen::Vector3d{0, 0, 0}, "end", end_wp_idx)});
+        auto instance = &Velocity_Network_.back();
+        Eigen::Vector3d end_direction = velocity_direction_prior_from_EGOPLANNER_.back();
+        Eigen::Matrix<float, 3, 21> normVel_gate_dir = normSample(end_direction);
+        for (int j = 0; j < 20; j++) {
+            instance->emplace_back(false, INF, Eigen::Vector3d {normVel_gate_dir(0, j), normVel_gate_dir(1, j), normVel_gate_dir(2, j)}, "end", end_wp_idx, j + 1);
+        }
+        instance->erase(instance->begin());
+    }
     shortestPathSearching();
     reverse();
 //    for (const auto &item: wayPoint_Optimal_VelocityVec_) {

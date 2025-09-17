@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     // 求解轨迹，传入track的航点数可以更改
     //PointMassPathSearching::normSample里可以更改采样速度大小的定义范围
     // 当前的速度方向严格按照给定的direction，不进行速度方向的采样和搜索
-    pmps.solve(circular_track, start_position, start_velocity, start_attitude, fix_replan);
+    pmps.solve(circular_track, start_position, start_velocity, start_attitude, true, fix_replan);
     // 按照给定时间步长进行采样
     pmps.drawTrajectory(0.03); // Generate trajectory points with a 0.03s timestep
     // 返回一个列表，按时间步存放[posx,posy,posz,velx,vely,velz]
