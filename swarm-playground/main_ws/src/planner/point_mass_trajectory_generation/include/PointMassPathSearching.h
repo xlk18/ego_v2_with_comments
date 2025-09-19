@@ -312,7 +312,7 @@ public:
     };
 
     std::vector<OptimalNode> solve(std::deque<waypoint> waypointVec, const Eigen::Vector3d &currentPosition,
-                                   const Eigen::Vector3d &currentVelcity, const Eigen::Vector4d &currentAttitude, bool touch_goal, bool is_fix=false);
+                                   const Eigen::Vector3d &currentVelcity, const Eigen::Vector4d &currentAttitude, bool is_fix=false);
 
     void drawTrajectory(double delta_t);
 
@@ -329,6 +329,8 @@ public:
 
     void saveTrajectory2file();
 
+    inline const std::vector<OptimalNode> &getwaypointOptimalVel() const {return wayPoint_Optimal_VelocityVec_;}
+
 private:
     void cleanPreSample();
 
@@ -336,7 +338,7 @@ private:
 
     void sampleVelocity(Eigen::Vector3d curVelocity);
 
-    void preSearch(bool touch_goal);
+    void preSearch();
 
     Eigen::Matrix<float, 3, 21> normSample(Eigen::Vector3d cone_direction);
 

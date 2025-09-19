@@ -24,8 +24,8 @@
     <arg name="target4_x" default="0.0"/>
     <arg name="target4_y" default="0.0"/>
     <arg name="target4_z" default="0.0"/>
-    <arg name="max_vel" default="15.0" />
-    <arg name="max_acc" default="20.0" />
+    <arg name="max_vel" default="5.0" />
+    <arg name="max_acc" default="10.0" />
     <!-- topic of your odometry such as VIO or LIO -->
     <arg name="odom_topic"/>
     <!-- main algorithm params -->
@@ -79,14 +79,16 @@
     </include>
     <!-- trajectory server -->
     <node pkg="ego_planner" name="drone_$(arg drone_id)_traj_server" type="traj_server" output="screen">
-        <remap from="position_cmd" to="drone_$(arg drone_id)_planning/pos_cmd"/>
+        <!-- <remap from="position_cmd" to="drone_$(arg drone_id)_planning/pos_cmd"/>-->
+        <remap from="point_mass_cmd" to="drone_$(arg drone_id)_planning/pos_cmd"/>
         <remap from="~planning/trajectory" to="drone_$(arg drone_id)_planning/trajectory"/>
         <param name="traj_server/time_forward" value="1.0" type="double"/>
-        
+  
         <param name="traj_server/use_time_reallocation" value="true" type="bool"/>
         <param name="traj_server/max_acc" value="$(arg max_acc)" type="double"/>
         <param name="traj_server/max_vel" value="$(arg max_vel)" type="double"/>
-        <param name="traj_server/waypoint_spacing" value="0.5" type="double"/>
+        <param name="traj_server/waypoint_spacing" value="1.0" type="double"/>
+        <param name="traj_server/pub_origin_cmd" value="true" type="bool"/>
     </node>
     <!-- use simulator -->
     <include file="$(find ego_planner)/launch/include/simulator.xml">
