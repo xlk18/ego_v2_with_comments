@@ -21,6 +21,9 @@
 #include <traj_utils/planning_visualization.h>
 #include <traj_utils/PolyTraj.h>
 #include <traj_utils/MINCOTraj.h>
+#include <traj_utils/PointMassTraj.h>
+#include <PointMassPathSearching.h>
+
 
 using std::vector;
 

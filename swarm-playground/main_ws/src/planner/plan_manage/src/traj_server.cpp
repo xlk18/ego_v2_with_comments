@@ -20,6 +20,7 @@ constexpr double PM_TRAJ_STEP = 0.01;
 
 ros::Publisher pos_cmd_pub;
 ros::Publisher point_mass_cmd_pub;
+ros::Publisher point_mass_path_pub;
 quadrotor_msgs::PositionCommand cmd;
 
 bool receive_traj_ = false;
@@ -140,6 +141,10 @@ std::deque<waypoint> sampleTrajectoryWaypoints(const boost::shared_ptr<poly_traj
 // 从质点轨迹得到控制命令
 void getpointMassCmd(const std::deque<std::vector<double>> &trajectory)
 {
+  nav_msgs::Path path;
+  path.header.stamp = ros::Time::now();
+  path.header.frame_id = "world";
+
   point_mass_positions_.clear();
   point_mass_velocities_.clear();
   num = trajectory.size();
@@ -148,7 +153,16 @@ void getpointMassCmd(const std::deque<std::vector<double>> &trajectory)
   for (const auto& point : trajectory) {
     point_mass_positions_.emplace_back(Eigen::Vector3d{point.at(0), point.at(1), point.at(2)});
     point_mass_velocities_.emplace_back(Eigen::Vector3d{point.at(3), point.at(4), point.at(5)});
+    geometry_msgs::PoseStamped pose;
+    pose.header.stamp = path.header.stamp;
+    pose.header.frame_id = path.header.frame_id;
+    pose.pose.position.x = point.at(0);
+    pose.pose.position.y = point.at(1);
+    pose.pose.position.z = point.at(2);
+    pose.pose.orientation.w = 1.0; 
+    path.poses.push_back(pose);
   }
+  point_mass_path_pub.publish(path);
 }
 
 void polyTrajCallback(traj_utils::PolyTrajPtr msg)
@@ -482,7 +496,7 @@ int main(int argc, char **argv)
 
   pos_cmd_pub = nh.advertise<quadrotor_msgs::PositionCommand>("/position_cmd", 50);
   point_mass_cmd_pub = nh.advertise<quadrotor_msgs::PositionCommand>("/point_mass_cmd", 50);
-
+  point_mass_path_pub = nh.advertise<nav_msgs::Path>("/point_mass_path", 10);
   ros::Timer cmd_timer = nh.createTimer(ros::Duration(0.01), cmdCallback);
 
   nh.param("traj_server/time_forward", time_forward_, -1.0);
