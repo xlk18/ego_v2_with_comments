@@ -47,7 +47,7 @@ namespace ego_planner
     odom_sub_ = nh.subscribe("odom_world", 1, &EGOReplanFSM::odometryCallback, this);
     mandatory_stop_sub_ = nh.subscribe("mandatory_stop", 1, &EGOReplanFSM::mandatoryStopCallback, this);
 
-    /* Use MINCO trajectory to minimize the message size in wireless communication */
+    /* Use MINCO trajectory to minimize the message size in wireless communication （多机）*/
     broadcast_ploytraj_pub_ = nh.advertise<traj_utils::MINCOTraj>("planning/broadcast_traj_send", 10);
     broadcast_ploytraj_sub_ = nh.subscribe<traj_utils::MINCOTraj>("planning/broadcast_traj_recv", 100,
                                                                   &EGOReplanFSM::RecvBroadcastMINCOTrajCallback,
@@ -183,7 +183,7 @@ namespace ego_planner
 
       if (mondifyInCollisionFinalGoal()) // case 1: find that current goal is in obstacles
       {
-        // pass
+        // pass检查final_goal_是否在障碍物中,如果在障碍物中则修改final_goal_
       }
       else if ((target_type_ == TARGET_TYPE::PRESET_TARGET) &&
                (wpt_id_ < waypoint_num_ - 1) &&
@@ -207,6 +207,7 @@ namespace ego_planner
         /* The navigation task completed */
         changeFSMExecState(WAIT_TARGET, "FSM");
       }
+      // 超过轨迹一定时间或没有到达全局终点且当前轨迹执行快结束，进行重归划
       else if (t_cur > replan_thresh_ || (!touch_the_goal && close_to_current_traj_end)) // case 3: time to perform next replan
       {
         changeFSMExecState(REPLAN_TRAJ, "FSM");
@@ -478,10 +479,13 @@ namespace ego_planner
     LocalTrajData *info = &planner_manager_->traj_.local_traj;
     double t_cur = ros::Time::now().toSec() - info->start_time;
 
-    start_pt_ = info->traj.getPos(t_cur);
-    start_vel_ = info->traj.getVel(t_cur);
-    start_acc_ = info->traj.getAcc(t_cur);
-
+    // start_pt_ = info->traj.getPos(t_cur);
+    // start_vel_ = info->traj.getVel(t_cur);
+    // start_acc_ = info->traj.getAcc(t_cur);
+    // 质点模型
+    start_pt_ = odom_pos_;
+    start_vel_ = odom_vel_;
+    start_acc_ = Eigen::Vector3d(0, 0, 0);
     bool success = callReboundReplan(false, false);
 
     if (!success)
@@ -561,6 +565,7 @@ namespace ego_planner
     {
       Eigen::Vector3d orig_goal = final_goal_;
       double t_step = planner_manager_->grid_map_->getResolution() / planner_manager_->pp_.max_vel_;
+      // 从后往前查找
       for (double t = planner_manager_->traj_.global_traj.duration; t > 0; t -= t_step)
       {
         Eigen::Vector3d pt = planner_manager_->traj_.global_traj.traj.getPos(t);
@@ -568,6 +573,7 @@ namespace ego_planner
         {
           if (planNextWaypoint(pt)) // final_goal_=pt inside if success
           {
+            // 修改final_goal_成功
             ROS_INFO("Current in-collision waypoint (%.3f, %.3f %.3f) has been modified to (%.3f, %.3f %.3f)",
                      orig_goal(0), orig_goal(1), orig_goal(2), final_goal_(0), final_goal_(1), final_goal_(2));
             return true;

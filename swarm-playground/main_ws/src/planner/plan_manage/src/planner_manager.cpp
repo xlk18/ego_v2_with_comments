@@ -154,8 +154,8 @@ namespace ego_planner
       tailState << initTraj.getJuncPos(PN), initTraj.getJuncVel(PN), initTraj.getJuncAcc(PN);
       double final_cost;
       flag_success = ploy_traj_opt_->optimizeTrajectory(headState, tailState,
-                                                        innerPts, initTraj.getDurations(), final_cost);
-      best_MJO = ploy_traj_opt_->getMinJerkOpt();
+                                                        innerPts, initTraj.getDurations(), final_cost); //优化
+      best_MJO = ploy_traj_opt_->getMinJerkOpt(); //返回优化后的轨迹
 
       t_opt = ros::Time::now() - t_start;
     }
@@ -175,7 +175,7 @@ namespace ego_planner
       //      << ",optimize:" << t_opt.toSec()
       //      << ",avg_time=" << sum_time / count_success << endl;
 
-      setLocalTrajFromOpt(best_MJO, touch_goal);
+      setLocalTrajFromOpt(best_MJO, touch_goal); // 将优化轨迹存在local_traj中
       cstr_pts = best_MJO.getInitConstraintPoints(ploy_traj_opt_->get_cps_num_prePiece_());
       visualization_->displayOptimalList(cstr_pts, 0);
 
@@ -385,9 +385,9 @@ namespace ego_planner
   bool EGOPlannerManager::setLocalTrajFromOpt(const poly_traj::MinJerkOpt &opt, const bool touch_goal)
   {
     poly_traj::Trajectory traj = opt.getTraj();
-    Eigen::MatrixXd cps = opt.getInitConstraintPoints(getCpsNumPrePiece());
+    Eigen::MatrixXd cps = opt.getInitConstraintPoints(getCpsNumPrePiece());//粗采样
     PtsChk_t pts_to_check;
-    bool ret = ploy_traj_opt_->computePointsToCheck(traj, ConstraintPoints::two_thirds_id(cps, touch_goal), pts_to_check);
+    bool ret = ploy_traj_opt_->computePointsToCheck(traj, ConstraintPoints::two_thirds_id(cps, touch_goal), pts_to_check);//细采样
     if (ret && pts_to_check.size() >= 1 && pts_to_check.back().size() >= 1)
     {
       traj_.setLocalTraj(traj, pts_to_check, ros::Time::now().toSec());
