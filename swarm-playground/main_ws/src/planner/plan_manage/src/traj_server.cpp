@@ -63,6 +63,7 @@ std::vector<Eigen::Vector3d> point_mass_positions_;
 std::vector<Eigen::Vector3d> point_mass_velocities_; 
 // 航点相关参数
 double waypoint_spacing_;                       // 航点间距（米）
+double waypoint_time_;                          // 航点间隔时间（秒）
 int min_waypoints_ = 3;                               // 最小航点数
 int max_waypoints_ = 15;                              // 最大航点数
 double max_acc_;                               // 最大加速度
@@ -127,7 +128,7 @@ static void appendPointMassTrajCSV(
   ofs.close();
 }
 
-// 追加保存航点
+// 保存航点
 static void appendWaypointsCSV(
   int replan_id,
   const std::deque<waypoint> &wps,
@@ -157,12 +158,27 @@ void heartbeatCallback(std_msgs::EmptyPtr msg)
 }
 
 // 根据轨迹长度计算航点数量 
-int calculateOptimalWaypointCount(const double &traj_len)
+int calculateOptimalWaypointCount_Space(const double &traj_len)
 {
     // 根据间距计算需要的航点数量
     int waypoint_count = static_cast<int>(std::ceil(traj_len / waypoint_spacing_)) + 1; 
     // 限制在合理范围内
     waypoint_count = std::max(min_waypoints_, std::min(max_waypoints_, waypoint_count));
+    return waypoint_count;
+}
+
+int calculateOptimalWaypointCount_Time(const double &traj_duration)
+{
+    if (traj_duration < 1e-6) {
+        return min_waypoints_;
+    }
+
+    // 根据总时长和期望的段时长，计算需要的航点数量
+    int waypoint_count = static_cast<int>(std::ceil(traj_duration / waypoint_time_)) + 1; 
+
+    // 将计算出的数量限制在预设的合理范围内
+    waypoint_count = std::max(min_waypoints_, std::min(max_waypoints_, waypoint_count));
+    
     return waypoint_count;
 }
 
@@ -330,7 +346,16 @@ void polyTrajCallback(traj_utils::PolyTrajPtr msg)
   if (use_time_reallocation_) {
     ros::Time time_1 = ros::Time::now();
     double traj_length_ = traj_->getLength(traj_duration_);
-    int waypoint_num = calculateOptimalWaypointCount(traj_length_);
+    int waypoint_num = calculateOptimalWaypointCount_Space(traj_length_);
+    // int waypoint_num;
+    // if (sampling_strategy_ == "time")
+    // {
+    //   waypoint_num = calculateOptimalWaypointCount_Time(traj_duration_);
+    // }
+    // else // Default to space-based
+    // {
+    //   waypoint_num = calculateOptimalWaypointCount_Space(traj_length_);
+    // }
     try {
       point_mass_planner_ = std::make_unique<PointMassPathSearching>(
         max_acc_, max_acc_, max_acc_,
@@ -669,6 +694,7 @@ int main(int argc, char **argv)
   nh.param("traj_server/use_time_reallocation", use_time_reallocation_, false);
   nh.param("traj_server/sampling_strategy", sampling_strategy_, std::string("space")); // "space" or "time"
   nh.param("traj_server/waypoint_spacing", waypoint_spacing_, 0.5);
+  nh.param("traj_server/waypoint_time", waypoint_time_, 0.5);
   nh.param("traj_server/max_acc", max_acc_, 10.0);
   nh.param("traj_server/max_vel", max_vel_, 10.0);
   nh.param("traj_server/pub_origin_cmd", pub_origin_cmd_, true);

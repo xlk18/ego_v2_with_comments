@@ -25,7 +25,7 @@
     <arg name="target4_y" default="0.0"/>
     <arg name="target4_z" default="0.0"/>
     <arg name="max_vel" default="5.0" />
-    <arg name="max_acc" default="10.0" />
+    <arg name="max_acc" default="8.0" />
     <!-- topic of your odometry such as VIO or LIO -->
     <arg name="odom_topic"/>
     <!-- main algorithm params -->
@@ -90,6 +90,7 @@
         <param name="traj_server/max_acc" value="$(arg max_acc)" type="double"/>
         <param name="traj_server/max_vel" value="$(arg max_vel)" type="double"/>
         <param name="traj_server/waypoint_spacing" value="1.0" type="double"/>
+        <param name="traj_server/waypoint_time" value="0.2" type="double"/>
         <param name="traj_server/pub_origin_cmd" value="true" type="bool"/>
     </node>
     <!-- use simulator -->
