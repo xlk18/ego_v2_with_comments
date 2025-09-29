@@ -24,19 +24,21 @@ using namespace Eigen;
 
 constexpr double PM_TRAJ_STEP = 0.01;
 
+// ROS Publishers and message types
 ros::Publisher pos_cmd_pub;
 ros::Publisher point_mass_cmd_pub;
 ros::Publisher point_mass_path_pub;
 ros::Publisher replan_flag_pub;
 quadrotor_msgs::PositionCommand cmd;
 // 数据存储
-int replan_seq_ = 0;                      
-bool replan_flag_state_ = false; 
+int replan_seq_ = 0;
+bool replan_flag_state_ = false;
 std::string replan_log_dir_ = "/tmp/traj_logs";
-std::string original_csv_file_;            
-std::string point_mass_csv_file_;          
-std::string waypoints_csv_file_; 
+std::string original_csv_file_;
+std::string point_mass_csv_file_;
+std::string waypoints_csv_file_;
 
+// Trajectory state variables
 bool receive_traj_ = false;
 boost::shared_ptr<poly_traj::Trajectory> traj_;
 double traj_duration_;
@@ -59,8 +61,8 @@ bool use_time_reallocation_ ;                    // 是否使用新的质点模�
 std::unique_ptr<PointMassPathSearching> point_mass_planner_;  // 质点规划器
 Trajectories::Trajectories point_mass_trajectory_;     // 存储质点轨迹
 bool point_mass_trajectory_ready_ = false;             // 质点轨迹是否准备好
-std::vector<Eigen::Vector3d> point_mass_positions_;          
-std::vector<Eigen::Vector3d> point_mass_velocities_; 
+std::vector<Eigen::Vector3d> point_mass_positions_;
+std::vector<Eigen::Vector3d> point_mass_velocities_;
 // 航点相关参数
 double waypoint_spacing_;                       // 航点间距（米）
 double waypoint_time_;                          // 航点间隔时间（秒）
@@ -132,22 +134,30 @@ static void appendPointMassTrajCSV(
 static void appendWaypointsCSV(
   int replan_id,
   const std::deque<waypoint> &wps,
+  const std::vector<double>& original_traj_times, // Parallel vector for original times
+  const std::vector<OptimalNode>& optimal_nodes,
   const std::string& filepath)
 {
-  if (wps.empty()) return;
+  if (wps.empty() || optimal_nodes.empty() || original_traj_times.empty() || 
+      wps.size() != optimal_nodes.size() || wps.size() != original_traj_times.size()) return;
+
   bool need_header = !fileExists(filepath);
   std::ofstream ofs(filepath, std::ios::app);
   if (!ofs.is_open()) { ROS_WARN("Fail to open %s", filepath.c_str()); return; }
   if (need_header) {
-    ofs << "replan_id,idx,x,y,z\n";
+    ofs << "replan_id,idx,x,y,z,t_original,t_point_mass\n";
   }
-  int idx = 0;
-  for (const auto& w : wps) {
+
+  for (size_t i = 0; i < wps.size(); ++i) {
+    const auto& w = wps[i];
+    const auto& node = optimal_nodes[i];
     ofs << replan_id << ","
-        << idx << ","
+        << w.index << ","
         << std::fixed << std::setprecision(6)
-        << w.position.x() << "," << w.position.y() << "," << w.position.z() << "\n";
-    idx++;
+        << w.position.x() << "," << w.position.y() << "," << w.position.z() << ","
+        << std::fixed << std::setprecision(3)
+        << original_traj_times[i] << "," // Use the time from the parallel vector
+        << node.g_from_begin << "\n";
   }
   ofs.close();
 }
@@ -212,49 +222,49 @@ double findTimeAtDistance(const boost::shared_ptr<poly_traj::Trajectory> &trajec
     return t_guess;
 }
 
-// 从原始轨迹采样航点 
-std::deque<waypoint> sampleTrajectoryWaypoints_Space(const boost::shared_ptr<poly_traj::Trajectory> &trajectory, int num_samples)
+void sampleTrajectoryWaypoints_Space(
+    const boost::shared_ptr<poly_traj::Trajectory> &trajectory, 
+    int num_samples,
+    std::deque<waypoint>& waypoints,          // Output
+    std::vector<double>& original_traj_times) // Output
 {
-  std::deque<waypoint> point_mass_waypoints_; 
+  waypoints.clear();
+  original_traj_times.clear();
+  
   double total_duration = trajectory->getTotalDuration();
   double length = trajectory->getLength(total_duration);
-  if (num_samples == 3)
+  
+  // Start point
+  double t0 = 0.0;
+  waypoints.emplace_back(trajectory->getPos(t0), trajectory->getVel(t0), 0);
+  original_traj_times.push_back(t0);
+
+  // Intermediate points
+  for (int i = 1; i < num_samples - 1; i++)  
   {
-    point_mass_waypoints_.emplace_back(trajectory->getPos(0.0), trajectory->getVel(0.0), 0);
-    point_mass_waypoints_.emplace_back(trajectory->getPos(total_duration / 2), trajectory->getVel(total_duration / 2).normalized(), 1);
-    point_mass_waypoints_.emplace_back(trajectory->getPos(total_duration), trajectory->getVel(total_duration), 2);
-  }else if (num_samples == 15 )
-  {
-    point_mass_waypoints_.emplace_back(trajectory->getPos(0.0), trajectory->getVel(0.0), 0);
-    for (size_t i = 1; i < 14; i++)
-    {
-      double target_dist = i * length / 14;
-      double t = findTimeAtDistance(trajectory, target_dist, length);
-      Eigen::Vector3d pos = trajectory->getPos(t);
-      Eigen::Vector3d vel = trajectory->getVel(t);
-      Eigen::Vector3d vel_dir = vel.normalized();
-      point_mass_waypoints_.emplace_back(pos, vel_dir, i);
-    }
-    point_mass_waypoints_.emplace_back(trajectory->getPos(total_duration), trajectory->getVel(total_duration), 14);
-  }else{
-    point_mass_waypoints_.emplace_back(trajectory->getPos(0.0), trajectory->getVel(0.0), 0);
-    for (int i = 1; i < num_samples - 1; i++)  
-    {
       double target_dist = i * waypoint_spacing_;
       double t = findTimeAtDistance(trajectory, target_dist, length);
       Eigen::Vector3d pos = trajectory->getPos(t);
-      Eigen::Vector3d vel = trajectory->getVel(t);
-      Eigen::Vector3d vel_dir = vel.normalized();
-      point_mass_waypoints_.emplace_back(pos, vel_dir, i);
-    }
-    point_mass_waypoints_.emplace_back(trajectory->getPos(total_duration), trajectory->getVel(total_duration), num_samples-1);
+      Eigen::Vector3d vel = trajectory->getVel(t).normalized();
+      waypoints.emplace_back(pos, vel, i);
+      original_traj_times.push_back(t);
   }
-  return point_mass_waypoints_;
+
+  // End point
+  double t_end = total_duration;
+  waypoints.emplace_back(trajectory->getPos(t_end), trajectory->getVel(t_end), num_samples - 1);
+  original_traj_times.push_back(t_end);
 }
 
-std::deque<waypoint> sampleTrajectoryWaypoints_Time(const boost::shared_ptr<poly_traj::Trajectory> &trajectory, int num_samples)
+void sampleTrajectoryWaypoints_Time(
+    const boost::shared_ptr<poly_traj::Trajectory> &trajectory, 
+    int num_samples,
+    std::deque<waypoint>& waypoints,          // Output
+    std::vector<double>& original_traj_times) // Output
 {
-  std::deque<waypoint> point_mass_waypoints_; 
+  waypoints.clear();
+  original_traj_times.clear();
+
   double total_duration = trajectory->getTotalDuration();
 
   if (num_samples < 2) {
@@ -275,10 +285,9 @@ std::deque<waypoint> sampleTrajectoryWaypoints_Time(const boost::shared_ptr<poly
         }
     }
 
-    point_mass_waypoints_.emplace_back(pos, vel, i);
+    waypoints.emplace_back(pos, vel, i);
+    original_traj_times.push_back(t);
   }
-
-  return point_mass_waypoints_;
 }
 
 // 从质点轨迹得到控制命令
@@ -340,9 +349,11 @@ void polyTrajCallback(traj_utils::PolyTrajPtr msg)
   traj_.reset(new poly_traj::Trajectory(dura, cMats));
   traj_duration_ = traj_->getTotalDuration();
   
-  std::deque<std::vector<double>> pm_traj;
-  std::deque<waypoint> pm_waypoints;
-  //---------根据use_time_reallocation_标志决定是否使用质点轨迹优化------//
+  std::deque<std::vector<double>> pm_traj_to_log;
+  std::deque<waypoint> pm_waypoints_to_log;
+  std::vector<double> original_traj_times_to_log; 
+  std::vector<OptimalNode> optimal_nodes_to_log;
+
   if (use_time_reallocation_) {
     ros::Time time_1 = ros::Time::now();
     double traj_length_ = traj_->getLength(traj_duration_);
@@ -358,46 +369,46 @@ void polyTrajCallback(traj_utils::PolyTrajPtr msg)
     // }
     try {
       point_mass_planner_ = std::make_unique<PointMassPathSearching>(
-        max_acc_, max_acc_, max_acc_,
-        -max_acc_, -max_acc_, -max_acc_,
-        waypoint_num
+        max_acc_, max_acc_, max_acc_, -max_acc_, -max_acc_, -max_acc_, waypoint_num
       );
-      std::deque<waypoint> point_mass_waypoints_;
+
       if (sampling_strategy_ == "time")
       {
-        point_mass_waypoints_ = sampleTrajectoryWaypoints_Time(traj_, waypoint_num);
+        sampleTrajectoryWaypoints_Time(traj_, waypoint_num, pm_waypoints_to_log, original_traj_times_to_log);
       }
-      else // Default to space-based
+      else 
       {
-        point_mass_waypoints_ = sampleTrajectoryWaypoints_Space(traj_, waypoint_num);
+        sampleTrajectoryWaypoints_Space(traj_, waypoint_num, pm_waypoints_to_log, original_traj_times_to_log);
       }
-      pm_waypoints = point_mass_waypoints_;
+        
       Eigen::Vector3d start_pos = traj_->getPos(0.0);
       Eigen::Vector3d start_vel = traj_->getVel(0.0);
       Eigen::Vector4d start_attitude(1, 0, 0, 0);
-      point_mass_planner_->solve(point_mass_waypoints_, start_pos, start_vel, start_attitude, false);
-      if (!point_mass_planner_->getwaypointOptimalVel().empty())
+      
+      optimal_nodes_to_log = point_mass_planner_->solve(pm_waypoints_to_log, start_pos, start_vel, start_attitude, false);
+      
+      if (!optimal_nodes_to_log.empty())
       {
         point_mass_planner_->drawTrajectory(PM_TRAJ_STEP);
         point_mass_planner_->getPointMassTrajectory(&point_mass_trajectory_);
-        std::deque<std::vector<double>> trajectory = point_mass_trajectory_.get_full_trajectories_vec();
-        pm_traj = trajectory;
-        getpointMassCmd(trajectory);
+        pm_traj_to_log = point_mass_trajectory_.get_full_trajectories_vec();
+        getpointMassCmd(pm_traj_to_log);
         point_mass_trajectory_ready_ = true;
-      }else{
+      } else {
         point_mass_trajectory_ready_ = false;
       }
+
       ros::Time time_2 = ros::Time::now();
-      double execution_time = (time_2 - time_1).toSec();
-      ROS_INFO("[Point Mass Planning] Execution time: %.6f seconds", execution_time);
-    }catch(const std::exception& e){
+      ROS_INFO("[Point Mass Planning] Execution time: %.6f seconds", (time_2 - time_1).toSec());
+
+    } catch(const std::exception& e) {
       std::cerr << e.what() << '\n';
       use_time_reallocation_ = false;
     }
-  }else {
+  } else {
     point_mass_trajectory_ready_ = false;
   }
-
+  
   const int cur_id = replan_seq_++;
 
   replan_flag_state_ = !replan_flag_state_;
@@ -407,14 +418,13 @@ void polyTrajCallback(traj_utils::PolyTrajPtr msg)
   waypoints_csv_file_  = replan_log_dir_ + "/waypoints_all.csv";
   // 原始轨迹
   appendOriginalTrajCSV(cur_id, traj_, traj_duration_, original_csv_file_, PM_TRAJ_STEP);
-  // 质点轨迹
-  if (!pm_traj.empty()) {
-    appendPointMassTrajCSV(cur_id, pm_traj, point_mass_csv_file_, PM_TRAJ_STEP);
+  if (!pm_traj_to_log.empty()) {
+    appendPointMassTrajCSV(cur_id, pm_traj_to_log, point_mass_csv_file_, PM_TRAJ_STEP);
   }
-  // 航点
-  appendWaypointsCSV(cur_id, pm_waypoints, waypoints_csv_file_);
-
-  //---------------------------------------//
+  if (!pm_waypoints_to_log.empty() && !optimal_nodes_to_log.empty()) {
+    appendWaypointsCSV(cur_id, pm_waypoints_to_log, original_traj_times_to_log, optimal_nodes_to_log, waypoints_csv_file_);
+  }
+  
   start_time_ = msg->start_time;
   traj_id_ = msg->traj_id;
   receive_traj_ = true;
@@ -680,7 +690,7 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "traj_server");
   ros::NodeHandle nh("~");
 
-  ros::Subscriber poly_traj_sub = nh.subscribe("planning/trajectory", 10, polyTrajCallback);
+    ros::Subscriber poly_traj_sub = nh.subscribe("planning/trajectory", 10, polyTrajCallback);
   ros::Subscriber heartbeat_sub = nh.subscribe("heartbeat", 10, heartbeatCallback);
 
   pos_cmd_pub = nh.advertise<quadrotor_msgs::PositionCommand>("/position_cmd", 50);
