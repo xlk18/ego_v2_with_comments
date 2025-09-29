@@ -649,6 +649,39 @@ namespace ego_planner
     odom_vel_(1) = msg->twist.twist.linear.y;
     odom_vel_(2) = msg->twist.twist.linear.z;
 
+  odom_vel_buffer_.push_back(odom_vel_);
+  if (odom_vel_buffer_.size() > 5) 
+  {
+    odom_vel_buffer_.pop_front();
+  }
+
+  Eigen::Vector3d sum_vel = Eigen::Vector3d::Zero();
+  for (const auto& v : odom_vel_buffer_)
+  {
+    sum_vel += v;
+  }
+  Eigen::Vector3d avg_vel = sum_vel / odom_vel_buffer_.size();
+
+  if (odom_first_run_)
+  {
+    last_avg_vel_ = avg_vel;
+    last_odom_time_ = msg->header.stamp;
+    odom_acc_.setZero(); 
+    odom_first_run_ = false;
+  }
+  else
+  {
+    double dt = (msg->header.stamp - last_odom_time_).toSec();
+
+    if (dt > 1e-6) 
+    {
+      odom_acc_ = (avg_vel - last_avg_vel_) / dt;
+    }
+
+    last_avg_vel_ = avg_vel;
+    last_odom_time_ = msg->header.stamp;
+  }
+
     have_odom_ = true;
   }
 
