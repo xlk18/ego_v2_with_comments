@@ -79,7 +79,7 @@
         <param name="grid_map/local_update_range_x" value="5.5" />
         <param name="grid_map/local_update_range_y" value="5.5" />
         <param name="grid_map/local_update_range_z" value="2.0" /> <!-- different meaning between grid_map.cpp and grid_map_bigmap.cpp -->
-        <param name="grid_map/obstacles_inflation" value="0.1" />
+        <param name="grid_map/obstacles_inflation" value="0.15" />
         <param name="grid_map/local_map_margin" value="10"/>
         <param name="grid_map/enable_virtual_wall" value="true"/>
         <param name="grid_map/virtual_ceil" value="3.0"/>
@@ -121,12 +121,16 @@
         <param name="manager/drone_id" value="$(arg drone_id)"/>
         <!-- trajectory optimization -->
         <param name="optimization/constraint_points_perPiece" value="5" type="int"/>
-        <param name="optimization/weight_obstacle" value="10000.0" type="double"/>
+        <!-- 避障代价系数 -->
+        <param name="optimization/weight_obstacle" value="10000.0" type="double"/>  
         <param name="optimization/weight_obstacle_soft" value="5000.0" type="double"/>
         <param name="optimization/weight_swarm" value="10000.0" type="double"/>
+        <!-- 可行性约束包括vel,acc,jerk -->
         <param name="optimization/weight_feasibility" value="10000.0" type="double"/>
+        <!--  -->
         <param name="optimization/weight_sqrvariance" value="10000.0" type="double"/>
         <param name="optimization/weight_time" value="10.0" type="double"/>
+        <!-- 推离障碍物距离，分为两个权重不同的‘软硬’部分 -->
         <param name="optimization/obstacle_clearance" value="0.1" type="double"/>
         <param name="optimization/obstacle_clearance_soft" value="0.5" type="double"/>
         <param name="optimization/swarm_clearance" value="0.15000000000000002" type="double"/> <!-- heterogeneous support: my required clearance -->

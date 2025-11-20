@@ -23,7 +23,6 @@
 #include <traj_utils/MINCOTraj.h>
 #include <traj_utils/PointMassTraj.h>
 #include <PointMassPathSearching.h>
-#include <deque> 
 
 using std::vector;
 
@@ -79,11 +78,6 @@ namespace ego_planner
     bool have_trigger_, have_target_, have_odom_, have_new_target_, have_recv_pre_agent_, touch_goal_, mandatory_stop_;
     FSM_EXEC_STATE exec_state_;
     int continously_called_times_{0};
-
-    std::deque<Eigen::Vector3d> odom_vel_buffer_;       // 存储最近速度值的缓冲区
-    Eigen::Vector3d last_avg_vel_;                      // 存储上一次的平均速度
-    ros::Time last_odom_time_;                          // 存储上一次的时间戳
-    bool odom_first_run_ = true;                        // 第一次接收到消息的标志
 
     Eigen::Vector3d start_pt_, start_vel_, start_acc_;   // start state
     Eigen::Vector3d final_goal_;                             // goal state

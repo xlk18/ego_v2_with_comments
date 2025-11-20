@@ -35,7 +35,7 @@ namespace ego_planner
     variable_num_ = 4 * (piece_num_ - 1) + 1; //内点三维坐标加上时间变量，优化变量总数
     double x_init[variable_num_];
     memcpy(x_init, initInnerPts.data(), initInnerPts.size() * sizeof(x_init[0]));  // 复制约束点坐标
-    Eigen::Map<Eigen::VectorXd> Vt(x_init + initInnerPts.size(), initT.size());   // 映射时间部分
+    Eigen::Map<Eigen::VectorXd> Vt(x_init + initInnerPts.size(), initT.size());   // 取出时间部分映射为Vt
     RealT2VirtualT(initT, Vt);                                 // 实际时间转换为无约束虚拟时间
     min_ellip_dist2_.resize(swarm_trajs_->size());
 
@@ -216,7 +216,7 @@ namespace ego_planner
       const bool flag_first_init /*= true*/)
   {
 
-    Eigen::MatrixXd init_points = pt_data.getInitConstraintPoints(cps_num_prePiece_);
+    Eigen::MatrixXd init_points = pt_data.getInitConstraintPoints(cps_num_prePiece_);//粗采样
     poly_traj::Trajectory traj = pt_data.getTraj();
 
     if (flag_first_init)
@@ -405,6 +405,7 @@ namespace ego_planner
     vector<std::pair<int, int>> final_segment_ids;//最终的碰撞段索引
 
     /*** Assign data to each segment ***/
+    //遍历所有碰撞段
     for (size_t i = 0; i < segment_ids.size(); i++)
     {
       // step 1
@@ -1169,14 +1170,14 @@ namespace ego_planner
 
     fill(opt->min_ellip_dist2_.begin(), opt->min_ellip_dist2_.end(), std::numeric_limits<double>::max());
 
-    Eigen::Map<const Eigen::MatrixXd> P(x, 3, opt->piece_num_ - 1);
+    Eigen::Map<const Eigen::MatrixXd> P(x, 3, opt->piece_num_ - 1);//取出控制点坐标
     // Eigen::VectorXd T(Eigen::VectorXd::Constant(piece_nums, opt->t2T(x[n - 1]))); // same t
-    Eigen::Map<const Eigen::VectorXd> t(x + (3 * (opt->piece_num_ - 1)), opt->piece_num_);
-    Eigen::Map<Eigen::MatrixXd> gradP(grad, 3, opt->piece_num_ - 1);
+    Eigen::Map<const Eigen::VectorXd> t(x + (3 * (opt->piece_num_ - 1)), opt->piece_num_);//取出虚拟时间变量
+    Eigen::Map<Eigen::MatrixXd> gradP(grad, 3, opt->piece_num_ - 1);//对控制点坐标的梯度
     Eigen::Map<Eigen::VectorXd> gradt(grad + (3 * (opt->piece_num_ - 1)), opt->piece_num_);
-    Eigen::VectorXd T(opt->piece_num_);
+    Eigen::VectorXd T(opt->piece_num_);//真实时间变量
 
-    Eigen::VectorXd gradT(opt->piece_num_);
+    Eigen::VectorXd gradT(opt->piece_num_);//对真实时间变量的梯度
     double smoo_cost = 0, time_cost = 0;
     Eigen::VectorXd obs_swarm_feas_qvar_costs(4);
 
@@ -1184,7 +1185,7 @@ namespace ego_planner
 
     opt->jerkOpt_.generate(P, T); // Generate trajectory from {P,T}
 
-    opt->initAndGetSmoothnessGradCost2PT(gradT, smoo_cost); // Smoothness cost
+    opt->initAndGetSmoothnessGradCost2PT(gradT, smoo_cost); // Smoothness cost jerk平方积分
 
     opt->addPVAJGradCost2CT(gradT, obs_swarm_feas_qvar_costs, opt->cps_num_prePiece_); // Time int cost
 
@@ -1287,17 +1288,18 @@ namespace ego_planner
     {
 
       const Eigen::Matrix<double, 6, 3> &c = jerkOpt_.get_b().block<6, 3>(i * 6, 0);   // 获取第i段的多项式系数
-      step = jerkOpt_.get_T1()(i) / K;  // 计算采样步长，K是每段采样点数
+      step = jerkOpt_.get_T1()(i) / K;  // 计算采样步长，K是每段采样点数（粗采样）
       s1 = 0.0;
       // innerLoop = K;
 
       for (int j = 0; j <= K; ++j)
       {
-        //各多项式系数
+        //时间的幂
         s2 = s1 * s1;
         s3 = s2 * s1;
         s4 = s2 * s2;
         s5 = s4 * s1;
+        //位置到snap的基函数（抛去系数的剩余带时间项）
         beta0 << 1.0, s1, s2, s3, s4, s5;
         beta1 << 0.0, 1.0, 2.0 * s1, 3.0 * s2, 4.0 * s3, 5.0 * s4;
         beta2 << 0.0, 0.0, 2.0, 6.0 * s1, 12.0 * s2, 20.0 * s3;
@@ -1310,17 +1312,17 @@ namespace ego_planner
         jer = c.transpose() * beta3;
         sna = c.transpose() * beta4;
 
-        omg = (j == 0 || j == K) ? 0.5 : 1.0;
+        omg = (j == 0 || j == K) ? 0.5 : 1.0;//一段轨迹的首尾采样点权重为0.5（因为连接点会被计算两次），其余为1
 
-        cps_.points.col(i_dp) = pos;  //位置变了，但(p,v)不变
+        cps_.points.col(i_dp) = pos;  //位置变了，但(p,v)不变和索引绑定
 
         // collision
         if (obstacleGradCostP(i_dp, pos, gradp, costp))
         {
-          gradViolaPc = beta0 * gradp.transpose();
-          gradViolaPt = alpha * gradp.transpose() * vel;
-          jerkOpt_.get_gdC().block<6, 3>(i * 6, 0) += omg * step * gradViolaPc;
-          gdT(i) += omg * (costp / K + step * gradViolaPt);
+          gradViolaPc = beta0 * gradp.transpose();//对位置梯度转到对系数的梯度
+          gradViolaPt = alpha * gradp.transpose() * vel;//转到对时间梯度
+          jerkOpt_.get_gdC().block<6, 3>(i * 6, 0) += omg * step * gradViolaPc;//乘数值积分权重 step
+          gdT(i) += omg * (costp / K + step * gradViolaPt);//对时间的梯度由两部分组成，既影响积分区间也影响采样点在轨迹上的位置
           costs(0) += omg * step * costp;
         }
 
@@ -1342,8 +1344,8 @@ namespace ego_planner
         // feasibility
         if (feasibilityGradCostV(vel, gradv, costv))
         {
-          gradViolaVc = beta1 * gradv.transpose();
-          gradViolaVt = alpha * gradv.transpose() * acc;
+          gradViolaVc = beta1 * gradv.transpose();//对速度梯度转到对系数的梯度
+          gradViolaVt = alpha * gradv.transpose() * acc;//转到对时间梯度
           jerkOpt_.get_gdC().block<6, 3>(i * 6, 0) += omg * step * gradViolaVc;
           gdT(i) += omg * (costv / K + step * gradViolaVt);// 代价函数有两种对时间T的依赖，一种是积分化为离散求和对步长的，一种是直接的代价函数对T的依赖
           costs(2) += omg * step * costv;
@@ -1370,7 +1372,7 @@ namespace ego_planner
         // printf("L\n");
 
         s1 += step;
-        if (j != K || (j == K && i == N - 1)) //
+        if (j != K || (j == K && i == N - 1)) //确保i_dp是随着粗采样点索引增加
         {
           ++i_dp;
         }
@@ -1442,12 +1444,12 @@ namespace ego_planner
       double dist_err = obs_clearance_ - dist;
       double dist_err_soft = obs_clearance_soft_ - dist;
       Eigen::Vector3d dist_grad = cps_.direction[i_dp][j];
-
+      //分为两部分处理，‘硬’和‘软’约束
       if (dist_err > 0)
       {
         ret = true;
         costp += wei_obs_ * pow(dist_err, 3);
-        gradp += -wei_obs_ * 3.0 * dist_err * dist_err * dist_grad;
+        gradp += -wei_obs_ * 3.0 * dist_err * dist_err * dist_grad;//对pos的导数
       }
 
       if (dist_err_soft > 0)
@@ -1545,7 +1547,7 @@ namespace ego_planner
     double vpen = v.squaredNorm() - max_vel_ * max_vel_;
     if (vpen > 0)
     {
-      gradv = wei_feas_ * 6 * vpen * vpen * v;
+      gradv = wei_feas_ * 6 * vpen * vpen * v;//对速度导数
       costv = wei_feas_ * vpen * vpen * vpen;
       return true;
     }
@@ -1587,8 +1589,8 @@ namespace ego_planner
                                                             double &var)
   {
     int N = ps.cols() - 1;
-    Eigen::MatrixXd dps = ps.rightCols(N) - ps.leftCols(N);//计算相邻控制点之间的差值，3xN
-    Eigen::VectorXd dsqrs = dps.colwise().squaredNorm().transpose();//每段的平方和，Nx1
+    Eigen::MatrixXd dps = ps.rightCols(N) - ps.leftCols(N);//计算相邻控制点之间的差值，3xN，后列-前列
+    Eigen::VectorXd dsqrs = dps.colwise().squaredNorm().transpose();//每列差值数据的平方和，Nx1
     // double dsqrsum = dsqrs.sum();
     double dquarsum = dsqrs.squaredNorm();//所有段的平方和的平方和
     // double dsqrmean = dsqrsum / N;

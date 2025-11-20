@@ -63,6 +63,7 @@ Trajectories::Trajectories point_mass_trajectory_;     // 存储质点轨迹
 bool point_mass_trajectory_ready_ = false;             // 质点轨迹是否准备好
 std::vector<Eigen::Vector3d> point_mass_positions_;
 std::vector<Eigen::Vector3d> point_mass_velocities_;
+std::vector<Eigen::Vector3d> point_mass_accelerations_;
 // 航点相关参数
 double waypoint_spacing_;                       // 航点间距（米）
 double waypoint_time_;                          // 航点间隔时间（秒）
@@ -299,12 +300,15 @@ void getpointMassCmd(const std::deque<std::vector<double>> &trajectory)
 
   point_mass_positions_.clear();
   point_mass_velocities_.clear();
+  point_mass_accelerations_.clear();
   num = trajectory.size();
   point_mass_positions_.reserve(num); 
   point_mass_velocities_.reserve(num);
+  point_mass_accelerations_.reserve(num);
   for (const auto& point : trajectory) {
     point_mass_positions_.emplace_back(Eigen::Vector3d{point.at(0), point.at(1), point.at(2)});
     point_mass_velocities_.emplace_back(Eigen::Vector3d{point.at(3), point.at(4), point.at(5)});
+    point_mass_accelerations_.emplace_back(Eigen::Vector3d{point.at(6), point.at(7), point.at(8)});
     geometry_msgs::PoseStamped pose;
     pose.header.stamp = path.header.stamp;
     pose.header.frame_id = path.header.frame_id;
@@ -500,6 +504,7 @@ std::pair<double, double> calculate_pm_yaw(double t_cur, Eigen::Vector3d &pos, d
   
   double t_forward = t_cur + time_forward_;
   int t_pm = static_cast<int>(t_forward / PM_TRAJ_STEP); 
+  t_pm = std::max(0, std::min(t_pm, static_cast<int>(num) - 1));
   dir = t_forward <= num * PM_TRAJ_STEP
             ? point_mass_positions_.at(t_pm) - pos
             : point_mass_positions_.back() - pos;
@@ -641,6 +646,7 @@ void cmdCallback(const ros::TimerEvent &e)
         T_pm = std::min(T_pm, static_cast<int>(num) - 1);
         pos = point_mass_positions_.at(T_pm);
         vel = point_mass_velocities_.at(T_pm);
+        acc = point_mass_accelerations_.at(T_pm);
         /*** calculate yaw ***/
         yaw_yawdot = calculate_pm_yaw(t_cur, pos, (time_now - time_last).toSec());
         /*** calculate yaw ***/
@@ -690,7 +696,7 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "traj_server");
   ros::NodeHandle nh("~");
 
-    ros::Subscriber poly_traj_sub = nh.subscribe("planning/trajectory", 10, polyTrajCallback);
+  ros::Subscriber poly_traj_sub = nh.subscribe("planning/trajectory", 10, polyTrajCallback);
   ros::Subscriber heartbeat_sub = nh.subscribe("heartbeat", 10, heartbeatCallback);
 
   pos_cmd_pub = nh.advertise<quadrotor_msgs::PositionCommand>("/position_cmd", 50);
@@ -699,7 +705,7 @@ int main(int argc, char **argv)
   replan_flag_pub = nh.advertise<std_msgs::Int32>("/replan_flag", 10);
   ros::Timer cmd_timer = nh.createTimer(ros::Duration(0.01), cmdCallback);
   ros::Timer timer = nh.createTimer(ros::Duration(0.05), timerCallback);  
-  nh.param("traj_server/time_forward", time_forward_, -1.0);
+  nh.param("traj_server/time_forward", time_forward_, 1.0);
   //质点模型参数
   nh.param("traj_server/use_time_reallocation", use_time_reallocation_, false);
   nh.param("traj_server/sampling_strategy", sampling_strategy_, std::string("space")); // "space" or "time"

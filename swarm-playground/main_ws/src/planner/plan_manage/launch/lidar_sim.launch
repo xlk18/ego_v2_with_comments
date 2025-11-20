@@ -67,6 +67,12 @@
         <param name="traj_server/use_time_reallocation" value="true" type="bool"/>
         <param name="traj_server/waypoint_spacing" value="1.0" type="double"/>
         <param name="traj_server/pub_origin_cmd" value="true" type="bool"/>
+
+        <!--<remap from="point_mass_cmd" to="drone_$(arg drone_id)_planning/pos_cmd"/>-->
+  	    <param name="traj_server/replan_log_dir" value="/home/yyf/traj_logs"/>
+  	    <param name="traj_server/sampling_strategy" value="time" />
+        <param name="traj_server/waypoint_time" value="0.2" type="double"/>
+
     </node>
 
 </launch>

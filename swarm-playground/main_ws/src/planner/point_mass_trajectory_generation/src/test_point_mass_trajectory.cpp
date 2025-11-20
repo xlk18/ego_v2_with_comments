@@ -93,6 +93,7 @@ int main(int argc, char **argv) {
             pose.pose.position.x = point.at(0);
             pose.pose.position.y = point.at(1);
             pose.pose.position.z = point.at(2);
+            std::cout << point.size() << std::endl;
             pose.pose.orientation.w = 1.0; // Default orientation
             path_msg.poses.push_back(pose);
     }

@@ -293,6 +293,7 @@ namespace ego_planner
     return std::pair<int, FSM_EXEC_STATE>(continously_called_times_, exec_state_);
   }
 
+  //不断检查当前轨迹是否与障碍物发生碰撞
   void EGOReplanFSM::checkCollisionCallback(const ros::TimerEvent &e)
   {
     // check ground height by the way
@@ -320,6 +321,7 @@ namespace ego_planner
     }
 
     /* ---------- check trajectory ---------- */
+    // 找到当前轨迹上超过理论位置的第一个采样点
     double t_temp = t_cur; // t_temp will be changed in the next function!
     int i_start = info->traj.locatePieceIdx(t_temp);
 
@@ -479,13 +481,27 @@ namespace ego_planner
     LocalTrajData *info = &planner_manager_->traj_.local_traj;
     double t_cur = ros::Time::now().toSec() - info->start_time;
 
-    // start_pt_ = info->traj.getPos(t_cur);
-    // start_vel_ = info->traj.getVel(t_cur);
-    // start_acc_ = info->traj.getAcc(t_cur);
-    // 质点模型
-    start_pt_ = odom_pos_;
-    start_vel_ = odom_vel_;
-    start_acc_ = Eigen::Vector3d(0, 0, 0);
+    start_pt_ = info->traj.getPos(t_cur);
+    start_vel_ = info->traj.getVel(t_cur);
+    start_acc_ = info->traj.getAcc(t_cur);
+    // // // // 质点模型
+    // start_pt_ = odom_pos_;
+    // start_vel_ = odom_vel_;
+    // start_acc_ = Eigen::Vector3d(0, 0, 0);
+    // bool success = callReboundReplan(true, false);
+    // if (!success)
+    // {
+    //     for (int i = 0; i < trial_times; i++)
+    //     {
+    //         success = callReboundReplan(true, true);
+    //         if (success)
+    //             break;
+    //     }
+    //     if (!success)
+    //     {
+    //         return false;
+    //     }
+    // }
     bool success = callReboundReplan(false, false);
 
     if (!success)
@@ -648,39 +664,6 @@ namespace ego_planner
     odom_vel_(0) = msg->twist.twist.linear.x;
     odom_vel_(1) = msg->twist.twist.linear.y;
     odom_vel_(2) = msg->twist.twist.linear.z;
-
-  odom_vel_buffer_.push_back(odom_vel_);
-  if (odom_vel_buffer_.size() > 5) 
-  {
-    odom_vel_buffer_.pop_front();
-  }
-
-  Eigen::Vector3d sum_vel = Eigen::Vector3d::Zero();
-  for (const auto& v : odom_vel_buffer_)
-  {
-    sum_vel += v;
-  }
-  Eigen::Vector3d avg_vel = sum_vel / odom_vel_buffer_.size();
-
-  if (odom_first_run_)
-  {
-    last_avg_vel_ = avg_vel;
-    last_odom_time_ = msg->header.stamp;
-    odom_acc_.setZero(); 
-    odom_first_run_ = false;
-  }
-  else
-  {
-    double dt = (msg->header.stamp - last_odom_time_).toSec();
-
-    if (dt > 1e-6) 
-    {
-      odom_acc_ = (avg_vel - last_avg_vel_) / dt;
-    }
-
-    last_avg_vel_ = avg_vel;
-    last_odom_time_ = msg->header.stamp;
-  }
 
     have_odom_ = true;
   }
@@ -888,6 +871,7 @@ namespace ego_planner
       MINCO_msg.duration[i] = durs[i];
   }
 
+  //预测未来一段时间后地面的高度
   bool EGOReplanFSM::measureGroundHeight(double &height)
   {
     if (planner_manager_->traj_.local_traj.pts_chk.size() < 3) // means planning have not started

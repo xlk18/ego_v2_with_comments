@@ -942,7 +942,7 @@ namespace poly_traj
 
     private:
         template <typename EIGENVEC>
-        inline void addGradJbyT(EIGENVEC &gdT) const
+        inline void addGradJbyT(EIGENVEC &gdT) const//jerk cost对时间的梯度
         {
             for (int i = 0; i < N; i++)
             {
@@ -1301,7 +1301,7 @@ namespace poly_traj
         //     return gdT(i);
         // }
 
-        // jerk平方积分求和
+        // jerk平方然后从0到T(i)积分求和
         inline double getTrajJerkCost() const
         {
             double objective = 0.0;
