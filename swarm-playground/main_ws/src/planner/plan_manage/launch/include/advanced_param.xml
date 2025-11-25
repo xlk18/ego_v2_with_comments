@@ -127,7 +127,7 @@
         <param name="optimization/weight_swarm" value="10000.0" type="double"/>
         <!-- 可行性约束包括vel,acc,jerk -->
         <param name="optimization/weight_feasibility" value="10000.0" type="double"/>
-        <!--  -->
+        <!-- 轨迹长度均匀项系数 -->
         <param name="optimization/weight_sqrvariance" value="10000.0" type="double"/>
         <param name="optimization/weight_time" value="10.0" type="double"/>
         <!-- 推离障碍物距离，分为两个权重不同的‘软硬’部分 -->

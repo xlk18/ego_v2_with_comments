@@ -577,6 +577,7 @@ namespace ego_planner
     /*** Check and segment the initial trajectory according to obstacles ***/
     int in_id, out_id;
     vector<std::pair<int, int>> segment_ids;
+    //进入了新的障碍物
     bool flag_new_obs_valid = false;
     int i_end = ConstraintPoints::two_thirds_id(cps_.points, touch_goal_); // only check closed 2/3 points.
     for (int i = 1; i <= i_end; ++i)
@@ -589,6 +590,7 @@ namespace ego_planner
       {
         for (size_t k = 0; k < cps_.direction[i].size(); ++k)
         {
+          //如果大于说明当前点在基准点的外侧但occupied，说明是进入了新的障碍物，小于或为负说明当前点在旧的障碍物内
           if ((cps_.points.col(i) - cps_.base_point[i][k]).dot(cps_.direction[i][k]) < 1 * grid_map_->getResolution()) // current point is outside all the collision_points.
           {
             occ = false;
@@ -611,6 +613,7 @@ namespace ego_planner
             break;
           }
         }
+        //回溯找不到一个空闲点，说明起点就在障碍物内
         if (j < 0) // fail to get the obs free point
         {
           ROS_ERROR("The drone is in obstacle. It means a crash in real-world.");
@@ -627,6 +630,7 @@ namespace ego_planner
             break;
           }
         }
+        //往前找不到一个空闲点，说明终点就在障碍物内
         if (j >= cps_.cp_size) // fail to get the obs free point
         {
           ROS_WARN("Local target in collision, skip this planning.");
@@ -635,7 +639,7 @@ namespace ego_planner
           return false;
         }
 
-        i = j + 1;
+        i = j + 1;//防止重复，跳出当前障碍段
 
         segment_ids.push_back(std::pair<int, int>(in_id, out_id));
       }
@@ -662,6 +666,7 @@ namespace ego_planner
         }
         else
         {
+          //暂时抛弃这一段A*搜索失败的碰撞段,等待后续优化
           ROS_ERROR_COND(VERBOSE_OUTPUT, "A-star error");
           segment_ids.erase(segment_ids.begin() + i);
           --i;
@@ -673,6 +678,7 @@ namespace ego_planner
         if (segment_ids[i - 1].second >= segment_ids[i].first)
         {
           double middle = (double)(segment_ids[i - 1].second + segment_ids[i].first) / 2.0;
+          //将重叠部分均分给前后两个碰撞段
           segment_ids[i - 1].second = static_cast<int>(middle - 0.1);
           segment_ids[i].first = static_cast<int>(middle + 1.1);
         }
@@ -776,7 +782,7 @@ namespace ego_planner
         else
           ROS_WARN_COND(VERBOSE_OUTPUT, "Failed to generate direction. It doesn't matter.");
       }
-
+      //如果进去了新的障碍物，置为等待rebound，产生新的(p,v)并重启优化
       force_stop_type_ = STOP_FOR_REBOUND;
       return true;
     }
@@ -786,11 +792,11 @@ namespace ego_planner
 
   bool PolyTrajOptimizer::allowRebound(void) //zxzxzx
   {
-    // criterion 1
+    // criterion 1 优化先迭代次数够
     if (iter_num_ < 3)
       return false;
 
-    // criterion 2
+    // criterion 2  轨迹足够平滑不会有太大转折
     double min_product = 1;
     for (int i = 3; i <= cps_.points.cols() - 4; ++i) // ignore head and tail
     {
@@ -800,7 +806,7 @@ namespace ego_planner
         min_product = product;
       }
     }
-    if (min_product < 0.87) // 大于 30 degree
+    if (min_product < 0.87) // 大于 30 degree  cos30 = 0.866
       return false;
 
     // criterion 3
@@ -1238,7 +1244,7 @@ namespace ego_planner
   {
     for (int i = 0; i < VT.size(); ++i)
     {
-      double gdVT2Rt;
+      double gdVT2Rt;// dRT/dVT
       if (VT(i) > 0)
       {
         gdVT2Rt = VT(i) + 1.0;
@@ -1409,7 +1415,7 @@ namespace ego_planner
 
         gradViolaPc = beta0 * gdp.col(i_dp).transpose();
         gradViolaPt = alpha * gdp.col(i_dp).transpose() * vel;
-        jerkOpt_.get_gdC().block<6, 3>(i * 6, 0) += omg * gradViolaPc;
+        jerkOpt_.get_gdC().block<6, 3>(i * 6, 0) += omg * gradViolaPc;//离散求和不需要乘step
         gdT(i) += omg * (gradViolaPt);
         
         s1 += step;

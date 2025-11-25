@@ -1371,7 +1371,7 @@ namespace poly_traj
         inline void getGrad2TP(EIGENVEC &gdT,
                                EIGENMAT &gdInPs)
         {
-            solveAdjGradC(gdC);
+            solveAdjGradC(gdC);//求解gdC = M^T * lambda，将lambda存到gdC中
             addPropCtoT(gdC, gdT);
             addPropCtoP(gdC, gdInPs);
         }
