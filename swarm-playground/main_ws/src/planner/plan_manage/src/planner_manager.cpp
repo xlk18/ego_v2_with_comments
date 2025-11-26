@@ -58,7 +58,7 @@ namespace ego_planner
 
     /*** STEP 1: INIT ***/
     ploy_traj_opt_->setIfTouchGoal(touch_goal);
-    double ts = pp_.polyTraj_piece_length / pp_.max_vel_;
+    double ts = pp_.polyTraj_piece_length / pp_.max_vel_;//理论走完一段最短时间
 
     poly_traj::MinJerkOpt initMJO;  //轨迹由多段五次多项式组成，每段包括时间和系数
     if (!computeInitState(start_pt, start_vel, start_acc, local_target_pt, local_target_vel,
@@ -263,7 +263,7 @@ namespace ego_planner
       piece_dur_vec = Eigen::VectorXd::Constant(piece_nums, ts);
       innerPs.resize(3, piece_nums - 1);  //中间点数量
       int id = 0;
-      // 在初始轨迹的初始轨迹上均匀采样，作为新的中间点
+      // 在初始轨迹的初始轨迹上均匀采样，作为新的中间点，这里会取piece_nums-1个中间点
       double t_s = piece_dur, t_e = init_of_init_totaldur - piece_dur / 2;
       for (double t = t_s; t < t_e; t += piece_dur)
       {
@@ -296,7 +296,7 @@ namespace ego_planner
         ROS_INFO("t_to_lc_end < 0, exit and wait for another call.");
         return false;
       }
-      // 计算到局部目标点（重规划后）的总时间
+      // 计算到新的局部目标点的总时间，上一帧局部轨迹剩余还没飞完的时间 + 从局部轨迹终点到新的局部目标点的时间
       double t_to_lc_tgt = t_to_lc_end +
                            (traj_.global_traj.glb_t_of_lc_tgt - traj_.global_traj.last_glb_t_of_lc_tgt);
       int piece_nums = ceil((start_pt - local_target_pt).norm() / pp_.polyTraj_piece_length);
@@ -345,7 +345,7 @@ namespace ego_planner
   {
     double t;
     touch_goal = false;
-    // 从上一次的局部目标点开始寻找
+    // 从上一次的局部目标点开始寻找traj_.global_traj.glb_t_of_lc_tgt初始化为找到全局轨迹时刻
     traj_.global_traj.last_glb_t_of_lc_tgt = traj_.global_traj.glb_t_of_lc_tgt;
     // 全局轨迹上寻找略远于规划界限的点
     double t_step = planning_horizen / 20 / pp_.max_vel_;
@@ -472,7 +472,7 @@ namespace ego_planner
     double des_vel = pp_.max_vel_ / 1.5;
     Eigen::VectorXd time_vec(waypoints.size());
     // 时间分配
-    for (int j = 0; j < 2; ++j)
+    for (int j = 0; j < 2; ++j)// 最多尝试 2 次
     {
       for (size_t i = 0; i < waypoints.size(); ++i)
       {
