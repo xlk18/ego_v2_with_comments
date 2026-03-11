@@ -157,6 +157,7 @@ namespace ego_planner
       if (t > DURATION)
       {
         if (touch_goal_ && pts_check.size() > 0)
+        // if (pts_check.size() > 0)
         {
           while (pts_check.back().size() == 0)
           {

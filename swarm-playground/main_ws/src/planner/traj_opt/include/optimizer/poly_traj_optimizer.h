@@ -56,6 +56,7 @@ namespace ego_planner
     static inline int two_thirds_id(Eigen::MatrixXd &points, const bool touch_goal)
     {
       return touch_goal ? points.cols() - 1 : points.cols() - 1 - (points.cols() - 2) / 3;
+      // return touch_goal ? points.cols() - 1 : points.cols() - 1 - (points.cols() - 2) / 5;
       // return points.cols() - 1 ;
     }
 
