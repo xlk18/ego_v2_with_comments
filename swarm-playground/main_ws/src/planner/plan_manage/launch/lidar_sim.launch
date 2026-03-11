@@ -72,11 +72,6 @@
   	    <param name="traj_server/replan_log_dir" value="/home/yyf/traj_logs"/>
   	    <param name="traj_server/sampling_strategy" value="time" />
         <param name="traj_server/waypoint_time" value="0.2" type="double"/>
-
     </node>
 
 </launch>
-
-
-
-
