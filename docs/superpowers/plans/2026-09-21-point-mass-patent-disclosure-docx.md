@@ -214,19 +214,19 @@ Render the first page, a formula-heavy middle page, a pseudocode page, and the f
 - Consumes: all final deliverables.
 - Produces: verification evidence and a committed disclosure package.
 
-- [ ] **Step 1: Verify formulas against symbolic identities**
+- [x] **Step 1: Verify formulas against symbolic identities**
 
 Use SymPy to confirm the single-axis quadratic coefficients and the fixed-common-time synchronization coefficients reduce to zero residual, and verify a symmetric accelerate-then-decelerate example reaches the requested endpoint.
 
-- [ ] **Step 2: Verify document scope and counts**
+- [x] **Step 2: Verify document scope and counts**
 
 Check that the source contains at least 20,000 Han characters, all 18 required sections in order, no formal claims section, no excluded headings, no internal-development wording, no concrete source identifiers, and only neutral simulation placeholders.
 
-- [ ] **Step 3: Verify DOCX/source correspondence**
+- [x] **Step 3: Verify DOCX/source correspondence**
 
 Extract `word/document.xml` text from the DOCX and confirm every second-level source heading appears in order. Confirm the DOCX contains editable OMML math elements and the pseudocode text.
 
-- [ ] **Step 4: Review the final diff and commit**
+- [x] **Step 4: Review the final diff and commit**
 
 Run `git diff --check`, verify `swarm-playground/main_ws/.github/` remains untracked and unstaged, then commit only the disclosure source, DOCX, formatter, and completed plan:
 
