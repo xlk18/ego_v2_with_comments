@@ -39,7 +39,7 @@
 - `write_outputs(samples, waypoints, compute_time, csv_path, summary_path, plot_path) -> None`
 - CLI consumes `--topic`, `--node-log`, `--csv`, `--summary`, and `--plot` paths.
 
-- [ ] **Step 1: Create the capture-and-plot utility**
+- [x] **Step 1: Create the capture-and-plot utility**
 
 Implement a Python ROS node that waits for one nonempty `nav_msgs/Path`, validates `frame_id == "map"`, converts every pose position to `t,x,y,z` using `dt=0.03`, parses the computation-time line from the supplied node log, and writes:
 
@@ -59,7 +59,7 @@ The plot must use Matplotlib's noninteractive `Agg` backend and create a 1800-by
 
 Use `Noto Sans CJK SC`; label axes and units; show legends and grids; include actual point count and sampled duration in the title. Do not calculate or display velocity/acceleration.
 
-- [ ] **Step 2: Create the RViz configuration**
+- [x] **Step 2: Create the RViz configuration**
 
 Create a minimal RViz config containing only:
 
@@ -76,7 +76,7 @@ Orbit view centered near (25,0,2), with the complete 50 m diameter trajectory vi
 
 Keep the Displays panel visible so the screenshot proves the configured Path topic. Disable save prompts.
 
-- [ ] **Step 3: Run static checks**
+- [x] **Step 3: Run static checks**
 
 Run:
 
@@ -89,7 +89,7 @@ rg -n '/generated_trajectory|Fixed Frame|Generated trajectory|rviz/Path|rviz/Gri
 
 Expected: Python compilation succeeds, CLI help exits 0, and every RViz requirement appears.
 
-- [ ] **Step 4: Commit Task 1**
+- [x] **Step 4: Commit Task 1**
 
 ```bash
 git add docs/patents/tools/capture_test_pm_example.py \
