@@ -131,7 +131,7 @@ git commit -m "docs: draw patent figure 1 flowchart"
 - Consumes: the validated editable SVG from Task 1.
 - Produces: a 1600-pixel-wide PNG preview for user review without replacing the SVG source.
 
-- [ ] **Step 1: Render the SVG with Inkscape**
+- [x] **Step 1: Render the SVG with Inkscape**
 
 Run:
 
@@ -144,7 +144,7 @@ inkscape docs/patents/figures/figure-1-overall-flow.svg \
 
 Expected: Inkscape exits successfully and creates a nonempty PNG.
 
-- [ ] **Step 2: Verify file dimensions and format**
+- [x] **Step 2: Verify file dimensions and format**
 
 Run:
 
@@ -154,7 +154,7 @@ identify docs/patents/figures/figure-1-overall-flow-preview.png
 
 Expected: reports PNG format, width `1600`, and a positive portrait height.
 
-- [ ] **Step 3: Visually inspect the preview**
+- [x] **Step 3: Visually inspect the preview**
 
 Open the PNG and verify:
 
@@ -171,7 +171,7 @@ the final reconstruction wording refers to the same validated edge parameters
 
 If any item fails, adjust the SVG, rerun Task 1 Step 4, and render again.
 
-- [ ] **Step 4: Verify repository scope and commit the preview**
+- [x] **Step 4: Verify repository scope and commit the preview**
 
 Run:
 
