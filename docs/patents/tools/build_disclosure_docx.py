@@ -13,11 +13,12 @@ from xml.etree import ElementTree as ET
 
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 CT_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
 
-NS = {"w": W_NS, "r": R_NS, "rel": REL_NS, "ct": CT_NS}
+NS = {"w": W_NS, "m": M_NS, "r": R_NS, "rel": REL_NS, "ct": CT_NS}
 ET.register_namespace("w", W_NS)
 ET.register_namespace("r", R_NS)
 ET.register_namespace("", REL_NS)
@@ -215,6 +216,154 @@ def normalize_core_properties(package_files: dict[str, bytes]) -> None:
     package_files["docProps/core.xml"] = core_properties
 
 
+def serialize_omml(node: ET.Element | None) -> str:
+    """Serialize an OMML node into editable, LibreOffice-safe equation text."""
+    if node is None:
+        return ""
+    tag = node.tag.rsplit("}", 1)[-1]
+    children = list(node)
+    if tag == "t":
+        return node.text or ""
+    if tag in {"sSub", "sSup", "sSubSup"}:
+        base = node.find(qn(M_NS, "e"))
+        subscript = node.find(qn(M_NS, "sub"))
+        superscript = node.find(qn(M_NS, "sup"))
+        text = serialize_omml(base) if base is not None else ""
+        if subscript is not None:
+            text += "_" + serialize_omml(subscript)
+        if superscript is not None:
+            text += "^" + serialize_omml(superscript)
+        return text
+    if tag == "f":
+        numerator = node.find(qn(M_NS, "num"))
+        denominator = node.find(qn(M_NS, "den"))
+        return f"({serialize_omml(numerator)})/({serialize_omml(denominator)})"
+    if tag == "d":
+        properties = node.find(qn(M_NS, "dPr"))
+        expression = node.find(qn(M_NS, "e"))
+        begin = properties.find(qn(M_NS, "begChr")) if properties is not None else None
+        end = properties.find(qn(M_NS, "endChr")) if properties is not None else None
+        begin_character = begin.get(qn(M_NS, "val"), "") if begin is not None else ""
+        end_character = end.get(qn(M_NS, "val"), "") if end is not None else ""
+        return begin_character + serialize_omml(expression) + end_character
+    if tag == "m":
+        rows = []
+        for row in node.findall(qn(M_NS, "mr")):
+            cells = [serialize_omml(cell) for cell in row.findall(qn(M_NS, "e"))]
+            rows.append("; ".join(cells))
+        return "; ".join(rows)
+    if tag == "rad":
+        degree = node.find(qn(M_NS, "deg"))
+        expression = node.find(qn(M_NS, "e"))
+        degree_text = serialize_omml(degree)
+        root = "√" if not degree_text else f"√[{degree_text}]"
+        return root + "(" + serialize_omml(expression) + ")"
+    return "".join(serialize_omml(child) for child in children)
+
+
+def word_text_run(text: str) -> ET.Element:
+    run = ET.Element(qn(W_NS, "r"))
+    content = ET.SubElement(run, qn(W_NS, "t"))
+    if text.startswith(" ") or text.endswith(" "):
+        content.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    content.text = text
+    return run
+
+
+def contains_libreoffice_unsafe_math(math: ET.Element) -> bool:
+    unsafe_tags = {"d", "m", "sSup", "sSubSup"}
+    return any(
+        element.tag.rsplit("}", 1)[-1] in unsafe_tags
+        for element in math.iter()
+    )
+
+
+def replace_unsafe_math(document: ET.Element) -> None:
+    """Replace only LibreOffice-unsafe OMML constructs with editable text."""
+    for paragraph in document.findall(".//w:p", NS):
+        for index, child in enumerate(list(paragraph)):
+            if child.tag == qn(M_NS, "oMath") and contains_libreoffice_unsafe_math(child):
+                paragraph.remove(child)
+                paragraph.insert(index, word_text_run(serialize_omml(child)))
+            elif child.tag == qn(M_NS, "oMathPara"):
+                equations = child.findall(qn(M_NS, "oMath"))
+                if not equations or not any(contains_libreoffice_unsafe_math(item) for item in equations):
+                    continue
+                paragraph_properties = find_or_add(paragraph, qn(W_NS, "pPr"))
+                justification = find_or_add(paragraph_properties, qn(W_NS, "jc"))
+                justification.set(qn(W_NS, "val"), "center")
+                text = "".join(serialize_omml(item) for item in equations)
+                paragraph.remove(child)
+                paragraph.insert(index, word_text_run(text))
+
+
+def paragraph_text(paragraph: ET.Element) -> str:
+    return "".join(paragraph.itertext())
+
+
+def prepend_paragraph_text(paragraph: ET.Element, prefix: str) -> None:
+    for text in paragraph.findall(".//w:t", NS):
+        text.text = prefix + (text.text or "")
+        return
+    paragraph.append(word_text_run(prefix))
+
+
+def format_title_and_headings(document: ET.Element) -> list[str]:
+    """Make the title distinct and materialize visible section numbering."""
+    section_number = 0
+    subsection_number = 0
+    sections = []
+    for paragraph in document.findall(".//w:p", NS):
+        style = paragraph.find("w:pPr/w:pStyle", NS)
+        if style is None:
+            continue
+        style_id = style.get(qn(W_NS, "val"))
+        text = paragraph_text(paragraph)
+        if style_id == "Heading1" and text == "质点轨迹重构算法专利技术交底书":
+            style.set(qn(W_NS, "val"), "Title")
+            properties = find_or_add(paragraph, qn(W_NS, "pPr"))
+            justification = find_or_add(properties, qn(W_NS, "jc"))
+            justification.set(qn(W_NS, "val"), "center")
+        elif style_id == "Heading2":
+            section_number += 1
+            subsection_number = 0
+            prefix = f"{section_number}. "
+            if not text.startswith(prefix):
+                prepend_paragraph_text(paragraph, prefix)
+            sections.append(paragraph_text(paragraph))
+        elif style_id == "Heading3":
+            subsection_number += 1
+            prefix = f"{section_number}.{subsection_number} "
+            if not text.startswith(prefix):
+                prepend_paragraph_text(paragraph, prefix)
+    return sections
+
+
+def paragraph_with_style(style_id: str, text: str) -> ET.Element:
+    paragraph = ET.Element(qn(W_NS, "p"))
+    properties = ET.SubElement(paragraph, qn(W_NS, "pPr"))
+    ET.SubElement(properties, qn(W_NS, "pStyle"), {qn(W_NS, "val"): style_id})
+    paragraph.append(word_text_run(text))
+    return paragraph
+
+
+def populate_toc(document: ET.Element, sections: list[str]) -> None:
+    """Replace Pandoc's empty field-only TOC with visible static entries."""
+    body = document.find(qn(W_NS, "body"))
+    if body is None:
+        raise ValueError("missing document body")
+    for index, child in enumerate(list(body)):
+        if child.tag != qn(W_NS, "sdt"):
+            continue
+        entries = [paragraph_with_style("TOCHeading", "目录")]
+        entries.extend(paragraph_with_style("TOC1", text) for text in sections)
+        body.remove(child)
+        for offset, entry in enumerate(entries):
+            body.insert(index + offset, entry)
+        return
+    raise ValueError("missing Pandoc table of contents")
+
+
 def restyle_docx(path: Path) -> None:
     """Apply the disclosure's Word styles, page setup, and PAGE footer."""
     with zipfile.ZipFile(path) as package:
@@ -237,6 +386,9 @@ def restyle_docx(path: Path) -> None:
     )
 
     document = ET.fromstring(package_files["word/document.xml"])
+    sections = format_title_and_headings(document)
+    replace_unsafe_math(document)
+    populate_toc(document, sections)
     relationships = ET.fromstring(package_files["word/_rels/document.xml.rels"])
     footer_relation_id = footer_relationship_id(relationships)
     set_sections(document, footer_relation_id)
