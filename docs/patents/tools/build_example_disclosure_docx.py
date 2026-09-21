@@ -25,9 +25,14 @@ SOURCE = Path(__file__).resolve().parent.parent / (
 OUTPUT = SOURCE.with_suffix(".docx")
 WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
 A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
-NS = {**base.NS, "wp": WP_NS, "a": A_NS}
+PIC_NS = "http://schemas.openxmlformats.org/drawingml/2006/picture"
+NS = {**base.NS, "wp": WP_NS, "a": A_NS, "pic": PIC_NS}
 IMAGE_REL_TYPE = f"{R_NS}/image"
 MAXIMUM_WIDTH_EMU = 5_400_000
+NORMALIZED_DIRECTION_RHS = (
+    "=((sinθ_i,cosθ_i,1))/(√(sin²θ_i+cos²θ_i+1))"
+    "=((sinθ_i,cosθ_i,1))/(√(2))."
+)
 
 
 def build_with_resources(source: Path, output: Path) -> None:
@@ -46,6 +51,59 @@ def build_with_resources(source: Path, output: Path) -> None:
 def drawings(document: ET.Element) -> list[ET.Element]:
     return [element for element in document.iter()
             if element.tag in {qn(WP_NS, "inline"), qn(WP_NS, "anchor")}]
+
+
+def normalized_direction_paragraph(document: ET.Element) -> ET.Element:
+    """Locate the example's equation by its preceding prose, not global operands."""
+    body = document.find("w:body", NS)
+    require(body is not None, "missing document body")
+    children = list(body)
+    introductions = [index for index, child in enumerate(children)
+                     if child.tag == qn(W_NS, "p")
+                     and base.paragraph_text(child).endswith("各圆形航点同时赋予归一化参考运动方向：")]
+    require(len(introductions) == 1 and introductions[0] + 1 < len(children),
+            "missing unique normalized-direction formula introduction")
+    paragraph = children[introductions[0] + 1]
+    require(paragraph.tag == qn(W_NS, "p"), "missing normalized-direction formula paragraph")
+    return paragraph
+
+
+def preserve_normalized_direction(path: Path) -> None:
+    """Restore the fallback equation's hatted bold vector as safe editable OMML.
+
+    The base LO 6.4 fallback drops accent/style properties when serializing an
+    equation containing superscripts. Keep only this equation's left-hand side
+    in OMML; its remaining expression stays editable linear Word text.
+    """
+    with zipfile.ZipFile(path) as package:
+        files = {name: package.read(name) for name in package.namelist()}
+    document = ET.fromstring(files["word/document.xml"])
+    paragraph = normalized_direction_paragraph(document)
+    text = base.paragraph_text(paragraph)
+    require(re.sub(r"\s+", "", text).replace("^2", "²") == "q_i" + NORMALIZED_DIRECTION_RHS,
+            "normalized-direction fallback differs from the expected source equation")
+    for child in list(paragraph):
+        if child.tag != qn(W_NS, "pPr"):
+            paragraph.remove(child)
+    equation = ET.SubElement(paragraph, qn(M_NS, "oMath"))
+    subscript = ET.SubElement(equation, qn(M_NS, "sSub"))
+    expression = ET.SubElement(subscript, qn(M_NS, "e"))
+    accent = ET.SubElement(expression, qn(M_NS, "acc"))
+    properties = ET.SubElement(accent, qn(M_NS, "accPr"))
+    ET.SubElement(properties, qn(M_NS, "chr"), {qn(M_NS, "val"): "\u0302"})
+    base_expression = ET.SubElement(accent, qn(M_NS, "e"))
+    vector = ET.SubElement(base_expression, qn(M_NS, "r"))
+    run_properties = ET.SubElement(vector, qn(M_NS, "rPr"))
+    ET.SubElement(run_properties, qn(M_NS, "sty"), {qn(M_NS, "val"): "b"})
+    # LO 6.4 ignores both m:sty and w:b on this imported math run. The Unicode
+    # mathematical bold small q preserves its vector weight in Word and LO.
+    ET.SubElement(vector, qn(M_NS, "t")).text = "𝐪"
+    index = ET.SubElement(subscript, qn(M_NS, "sub"))
+    index_run = ET.SubElement(index, qn(M_NS, "r"))
+    ET.SubElement(index_run, qn(M_NS, "t")).text = "i"
+    paragraph.append(base.word_text_run(text[len("q_i"):].replace("^2", "²")))
+    files["word/document.xml"] = ET.tostring(document, encoding="utf-8", xml_declaration=True)
+    write_package(path, files)
 
 
 def set_keep_next(paragraph: ET.Element) -> None:
@@ -91,7 +149,12 @@ def fit_embedded_images(path: Path, maximum_width_emu: int = 5_400_000) -> None:
     with zipfile.ZipFile(path) as package:
         files = {name: package.read(name) for name in package.namelist()}
     document = ET.fromstring(files["word/document.xml"])
-    for drawing in drawings(document):
+    for number, drawing in enumerate(drawings(document), 1):
+        nonvisual = drawing.find("wp:docPr", NS)
+        require(nonvisual is not None, "drawing has no nonvisual properties")
+        nonvisual.set("id", str(number))
+        for picture_properties in drawing.findall(".//pic:cNvPr", NS):
+            picture_properties.set("id", str(number))
         extent = drawing.find("wp:extent", NS)
         require(extent is not None, "drawing has no extent")
         width, height = int(extent.get("cx", "0")), int(extent.get("cy", "0"))
@@ -232,6 +295,21 @@ def validate_example_docx(path: Path, source: Path) -> None:
     math_text = text + "".join(base.serialize_omml(equation) for equation in equations)
     for operand in ("q", "θ", "M", "363", "0.03", "10.86"):
         require(operand in math_text, f"missing mathematical operand: {operand}")
+    direction = normalized_direction_paragraph(document)
+    subscript = direction.find("m:oMath/m:sSub", NS)
+    require(subscript is not None, "normalized-direction vector has no editable subscript")
+    accent = subscript.find("m:e/m:acc/m:accPr/m:chr", NS)
+    vector = subscript.find("m:e/m:acc/m:e/m:r", NS)
+    require(accent is not None and accent.get(qn(M_NS, "val")) == "\u0302",
+            "normalized-direction vector has no hat accent")
+    require(vector is not None and base.serialize_omml(vector) == "𝐪"
+            and vector.find("m:rPr/m:sty[@m:val='b']", NS) is not None,
+            "normalized-direction vector q must be bold")
+    require(base.serialize_omml(subscript.find("m:sub", NS)) == "i",
+            "normalized-direction vector must have subscript i")
+    rhs = "".join(node.text or "" for node in direction.findall("w:r/w:t", NS))
+    require(re.sub(r"\s+", "", rhs) == NORMALIZED_DIRECTION_RHS,
+            "normalized-direction RHS operands or normalization denominator are incomplete")
     require(not document.findall(".//w:object", NS)
             and not any(node.tag.rsplit("}", 1)[-1] == "OLEObject" for node in document.iter())
             and not any(name.startswith("word/embeddings/") for name in names)
@@ -257,8 +335,19 @@ def validate_example_docx(path: Path, source: Path) -> None:
     require(len(targets) == 2 and set(targets.values()) == set(media), "invalid image relationship IDs")
     all_drawings = drawings(document)
     require(len(all_drawings) == 2, "expected two image drawings")
+    drawing_ids = [node.get("id", "") for node in document.findall(".//wp:docPr", NS)]
+    require(len(drawing_ids) == len(all_drawings)
+            and all(value.isdigit() and int(value) > 0 for value in drawing_ids)
+            and len({int(value) for value in drawing_ids}) == len(drawing_ids),
+            "drawing nonvisual IDs must be unique positive integers")
     used_ids = []
     for drawing in all_drawings:
+        nonvisual = drawing.find("wp:docPr", NS)
+        require(nonvisual is not None, "drawing has no nonvisual properties")
+        picture_properties = drawing.findall(".//pic:cNvPr", NS)
+        require(len(picture_properties) == 1
+                and picture_properties[0].get("id") == nonvisual.get("id"),
+                "picture nonvisual ID differs from drawing ID")
         extent = drawing.find("wp:extent", NS)
         require(extent is not None, "drawing has no extent")
         width, height = int(extent.get("cx", "0")), int(extent.get("cy", "0"))
@@ -290,6 +379,7 @@ def validate_example_docx(path: Path, source: Path) -> None:
 def main() -> int:
     build_with_resources(SOURCE, OUTPUT)
     base.restyle_docx(OUTPUT)
+    preserve_normalized_direction(OUTPUT)
     fit_embedded_images(OUTPUT)
     base.cache_toc_page_numbers(OUTPUT)
     validate_example_docx(OUTPUT, SOURCE)
