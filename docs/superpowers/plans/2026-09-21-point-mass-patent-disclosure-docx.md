@@ -115,7 +115,7 @@ Expected: `PASS han=<number at least 20000>`.
 - Consumes: `Path` objects for source Markdown and output DOCX.
 - Produces: an editable DOCX package with Pandoc-generated equations and a post-processed Open XML style layer.
 
-- [ ] **Step 1: Implement the command runner and Pandoc build**
+- [x] **Step 1: Implement the command runner and Pandoc build**
 
 Create a Python utility with these exact functions:
 
@@ -133,7 +133,7 @@ def main() -> int: ...
 pandoc SOURCE --from=markdown+tex_math_dollars --to=docx --toc --number-sections --metadata=lang:zh-CN --output=OUTPUT
 ```
 
-- [ ] **Step 2: Implement Word style updates**
+- [x] **Step 2: Implement Word style updates**
 
 In `restyle_docx`, open the DOCX as a ZIP package, parse `word/styles.xml`, and update or create run properties for these style IDs:
 
@@ -148,11 +148,11 @@ SourceCode: eastAsia=等线, ascii=Courier New, size=20 half-points
 
 Set the Normal paragraph style to 1.5-line spacing and a first-line indent of 480 twips. Set `word/document.xml` section margins to 1440 twips on all four sides and page size to A4 portrait (`w=11906`, `h=16838`).
 
-- [ ] **Step 3: Add centered page numbering**
+- [x] **Step 3: Add centered page numbering**
 
 Create `word/footer1.xml` containing a centered `PAGE` field; add its relationship to `word/_rels/document.xml.rels`, add its content-type override to `[Content_Types].xml`, and add a default footer reference to every final section property in `word/document.xml`. Repackage the files without changing unrelated Pandoc content.
 
-- [ ] **Step 4: Implement package validation**
+- [x] **Step 4: Implement package validation**
 
 `validate_docx` must verify that the ZIP contains:
 
