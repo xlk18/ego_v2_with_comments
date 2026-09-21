@@ -10,8 +10,10 @@ from __future__ import annotations
 from collections import Counter
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
+import os
 import re
 import struct
+import tempfile
 import zipfile
 from xml.etree import ElementTree as ET
 
@@ -29,6 +31,7 @@ PIC_NS = "http://schemas.openxmlformats.org/drawingml/2006/picture"
 NS = {**base.NS, "wp": WP_NS, "a": A_NS, "pic": PIC_NS}
 IMAGE_REL_TYPE = f"{R_NS}/image"
 MAXIMUM_WIDTH_EMU = 5_400_000
+TOC_INSTRUCTION = 'TOC \\o "2-2" \\h \\z \\u'
 NORMALIZED_DIRECTION_RHS = (
     "=((sinθ_i,cosθ_i,1))/(√(sin²θ_i+cos²θ_i+1))"
     "=((sinθ_i,cosθ_i,1))/(√(2))."
@@ -46,6 +49,19 @@ def build_with_resources(source: Path, output: Path) -> None:
         "--to=docx", "--toc", "--number-sections", "--metadata=lang:zh-CN",
         f"--resource-path={source.parent}", f"--output={output}",
     ])
+
+
+def restrict_toc_scope(path: Path) -> None:
+    """Keep Word's updated TOC limited to the 15 level-two section headings."""
+    with zipfile.ZipFile(path) as package:
+        files = {name: package.read(name) for name in package.namelist()}
+    document = ET.fromstring(files["word/document.xml"])
+    instructions = [node for node in document.findall(".//w:sdtContent//w:instrText", NS)
+                    if (node.text or "").strip().startswith("TOC ")]
+    require(len(instructions) == 1, "expected one complex TOC instruction")
+    instructions[0].text = f" {TOC_INSTRUCTION} "
+    files["word/document.xml"] = ET.tostring(document, encoding="utf-8", xml_declaration=True)
+    write_package(path, files)
 
 
 def drawings(document: ET.Element) -> list[ET.Element]:
@@ -277,8 +293,13 @@ def validate_example_docx(path: Path, source: Path) -> None:
 
     toc = document.find(".//w:sdtContent", NS)
     require(toc is not None, "missing TOC")
-    require(any((node.text or "").strip().startswith("TOC ")
-                for node in toc.findall(".//w:instrText", NS)), "TOC is not updateable")
+    instructions = [(node.text or "").strip()
+                    for node in toc.findall(".//w:instrText", NS)]
+    require(instructions == [TOC_INSTRUCTION],
+            "TOC must update only Heading2 sections with the exact intended instruction")
+    require([node.get(qn(W_NS, "fldCharType"))
+             for node in toc.findall(".//w:fldChar", NS)] == ["begin", "separate", "end"],
+            "TOC must retain valid complex-field boundaries")
     links = toc.findall(".//w:hyperlink", NS)
     require(len(links) == 15 and len(toc.findall(".//w:fldSimple", NS)) == 15,
             "TOC must contain 15 hyperlinks and PAGEREF fields")
@@ -392,13 +413,26 @@ def validate_example_docx(path: Path, source: Path) -> None:
 
 
 def main() -> int:
-    build_with_resources(SOURCE, OUTPUT)
-    base.restyle_docx(OUTPUT)
-    preserve_normalized_direction(OUTPUT)
-    fit_embedded_images(OUTPUT)
-    base.cache_toc_page_numbers(OUTPUT)
-    validate_example_docx(OUTPUT, SOURCE)
-    print(OUTPUT)
+    output = OUTPUT.resolve()
+    require(output != base.OUTPUT.resolve(), "cannot overwrite the original disclosure")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, name = tempfile.mkstemp(prefix=f".{output.stem}-", suffix=".docx",
+                                        dir=output.parent)
+    os.close(descriptor)
+    staging = Path(name)
+    try:
+        build_with_resources(SOURCE, staging)
+        base.restyle_docx(staging)
+        restrict_toc_scope(staging)
+        preserve_normalized_direction(staging)
+        fit_embedded_images(staging)
+        base.cache_toc_page_numbers(staging)
+        validate_example_docx(staging, SOURCE)
+        staging.chmod(output.stat().st_mode & 0o777 if output.exists() else 0o644)
+        os.replace(staging, output)
+    finally:
+        staging.unlink(missing_ok=True)
+    print(output)
     return 0
 
 
