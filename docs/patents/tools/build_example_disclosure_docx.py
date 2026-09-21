@@ -143,6 +143,15 @@ def is_caption(paragraph: ET.Element | None) -> bool:
             or paragraph.find("w:pPr/w:pStyle[@w:val='ImageCaption']", NS) is not None)
 
 
+def caption_continuations(document: ET.Element):
+    """Keep Pandoc's implicit caption attached to the source's explicit caption."""
+    for parent in document.iter():
+        children = list(parent)
+        for current, following in zip(children, children[1:]):
+            if is_caption(current) and is_caption(following):
+                yield current
+
+
 def fit_embedded_images(path: Path, maximum_width_emu: int = 5_400_000) -> None:
     """Fit drawings proportionally and keep explanatory text/captions adjacent."""
     require(maximum_width_emu > 0, "image width limit must be positive")
@@ -172,6 +181,8 @@ def fit_embedded_images(path: Path, maximum_width_emu: int = 5_400_000) -> None:
             set_keep_next(previous)
         if is_caption(following):
             set_keep_next(paragraph)
+    for caption in caption_continuations(document):
+        set_keep_next(caption)
     files["word/document.xml"] = ET.tostring(document, encoding="utf-8", xml_declaration=True)
     write_package(path, files)
 
@@ -374,6 +385,10 @@ def validate_example_docx(path: Path, source: Path) -> None:
             keep = candidate.find("w:pPr/w:keepNext", NS)
             require(keep is not None and keep.get(qn(W_NS, "val")) not in ("0", "false", "off"),
                     "image explanation/caption can separate across pages")
+    for caption in caption_continuations(document):
+        keep = caption.find("w:pPr/w:keepNext", NS)
+        require(keep is not None and keep.get(qn(W_NS, "val")) not in ("0", "false", "off"),
+                "implicit and explicit image captions can separate across pages")
 
 
 def main() -> int:

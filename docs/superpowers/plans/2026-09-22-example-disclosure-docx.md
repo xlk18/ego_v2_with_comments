@@ -140,11 +140,11 @@ git commit -m "docs: build measured-example disclosure DOCX"
 - Consumes: the Task 1 builder and DOCX.
 - Produces: semantic/package/rendering evidence and a completed plan.
 
-- [ ] **Step 1: Verify source-to-DOCX correspondence**
+- [x] **Step 1: Verify source-to-DOCX correspondence**
 
 Extract `word/document.xml` and verify all 15 H2 source headings appear in order after visible numbering. Confirm all five pseudocode titles and measured-example values appear. Confirm the DOCX contains exactly the two expected embedded image hashes and no other raster media.
 
-- [ ] **Step 2: Inspect OMML formula structure**
+- [x] **Step 2: Inspect OMML formula structure**
 
 Count editable `m:oMath`/`m:oMathPara` elements and require a positive count. Locate the paragraphs corresponding to representative formulas and verify their serialized operands, accents, subscripts and superscripts are complete. Specifically inspect:
 
@@ -161,11 +161,11 @@ m/s^2
 
 Allow existing intentional editable-text fallbacks, but reject missing operands, replacement characters, or formula images.
 
-- [ ] **Step 3: Export and scan the complete PDF**
+- [x] **Step 3: Export and scan the complete PDF**
 
 Use a unique LibreOffice profile to export the DOCX to PDF. Require positive page count and A4 page size. Extract every page with `pdftotext -layout` and fail on `¿`, `�`, `<?>`, missing measured values, or absent headings.
 
-- [ ] **Step 4: Render and visually inspect representative pages**
+- [x] **Step 4: Render and visually inspect representative pages**
 
 Use `pdftoppm` to render at least:
 
@@ -182,11 +182,11 @@ final 算法增益效果 page
 
 Inspect at original detail for Chinese glyphs, formula completeness/alignment, image aspect ratio, image clarity, caption adjacency, page breaks, margins, heading hierarchy and page numbers. If any defect is found, correct the builder, rebuild, and repeat Tasks 1–2 checks.
 
-- [ ] **Step 5: Run final isolation and reproducibility checks**
+- [x] **Step 5: Run final isolation and reproducibility checks**
 
 Run the builder once more, verify its SHA-256 matches the committed/generated artifact, run `git diff --check`, and confirm only the pre-existing user-modified original DOCX, Word lock, and unrelated `.github/` remain outside the committed scope.
 
-- [ ] **Step 6: Mark the plan complete and commit**
+- [x] **Step 6: Mark the plan complete and commit**
 
 Mark all Task 2 checkboxes complete only after the checks pass, then commit only the completed plan:
 
