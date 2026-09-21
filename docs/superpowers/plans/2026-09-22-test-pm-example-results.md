@@ -128,7 +128,13 @@ Expected: capture exits 0 after receiving a nonempty latched Path.
 
 - [x] **Step 2: Start RViz and capture the real window**
 
-While the same ROS master and node remain alive, start:
+While the same ROS master and node remain alive, first run the following visualization-only helper in the background and record its explicit PID as `tf_pid` before starting RViz:
+
+```bash
+rosrun tf2_ros static_transform_publisher 0 0 0 0 0 0 world map
+```
+
+The helper supplies the `world` to `map` unit static transform solely for coordinate-frame display and does not affect the `/generated_trajectory` Path data. Then start:
 
 ```bash
 rviz -d docs/patents/tools/test-pm-example.rviz
@@ -140,7 +146,7 @@ Wait until the Path status is OK and the complete trajectory is visible. Use `wm
 docs/patents/figures/test-pm-rviz-result.png
 ```
 
-After capture, terminate only the explicitly recorded RViz, node, and roscore PIDs. Do not use broad process-kill commands.
+After capture, terminate only the explicitly recorded RViz, static-transform helper (`tf_pid`), node, and roscore PIDs. Do not use broad process-kill commands.
 
 - [x] **Step 3: Validate numerical artifacts**
 
