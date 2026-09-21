@@ -31,7 +31,7 @@
 - Consumes: the approved Figure 1 node order, branch semantics, and patent drawing conventions.
 - Produces: a standalone SVG with reusable CSS classes, one arrow marker, labeled process nodes, two decision branches, and a candidate-edge loop.
 
-- [ ] **Step 1: Create the SVG canvas and reusable styles**
+- [x] **Step 1: Create the SVG canvas and reusable styles**
 
 Create an SVG with `viewBox="0 0 1600 2700"`, a white background, and these reusable classes:
 
@@ -48,7 +48,7 @@ Create an SVG with `viewBox="0 0 1600 2700"`, a white background, and these reus
 
 Define a black arrowhead marker and use only SVG geometry/text elements; do not embed bitmap data.
 
-- [ ] **Step 2: Draw the main vertical flow**
+- [x] **Step 2: Draw the main vertical flow**
 
 Place the following nodes on a single central axis with consistent spacing:
 
@@ -71,7 +71,7 @@ Place the following nodes on a single central axis with consistent spacing:
 
 Use rounded terminators for `开始/结束`, parallelograms for input/output, rectangles for processing, and diamonds for the two questions.
 
-- [ ] **Step 3: Add feasibility branches and the candidate-edge loop**
+- [x] **Step 3: Add feasibility branches and the candidate-edge loop**
 
 From `三轴共同时间是否可行？`:
 
@@ -82,7 +82,7 @@ From `三轴共同时间是否可行？`:
 
 Merge both branches before `相邻层候选边是否全部处理完成？`. From that decision, label the downward branch `是`; label the return branch `否` and route it outside the left side of all nodes back to `枚举相邻层候选节点对`. Keep loop lines outside node boundaries and avoid arrow crossings.
 
-- [ ] **Step 4: Run structural and content validation**
+- [x] **Step 4: Run structural and content validation**
 
 Run:
 
@@ -114,7 +114,7 @@ PY
 
 Expected: `SVG PASS`.
 
-- [ ] **Step 5: Commit the SVG**
+- [x] **Step 5: Commit the SVG**
 
 ```bash
 git add docs/patents/figures/figure-1-overall-flow.svg
