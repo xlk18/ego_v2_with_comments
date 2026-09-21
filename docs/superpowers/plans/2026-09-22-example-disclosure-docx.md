@@ -38,7 +38,7 @@
 - `main() -> int`
 - Reused helpers: `restyle_docx`, `cache_toc_page_numbers`, `write_package`, `run`, `require`, namespace constants and `qn`.
 
-- [ ] **Step 1: Implement resource-aware Pandoc conversion**
+- [x] **Step 1: Implement resource-aware Pandoc conversion**
 
 Invoke Pandoc with:
 
@@ -55,7 +55,7 @@ pandoc SOURCE
 
 Resolve all paths from `__file__`; do not depend on the caller's current directory.
 
-- [ ] **Step 2: Implement proportional image sizing**
+- [x] **Step 2: Implement proportional image sizing**
 
 Open the generated DOCX package, parse `word/document.xml`, and for each `wp:inline` or `wp:anchor` drawing:
 
@@ -67,7 +67,7 @@ Open the generated DOCX package, parse `word/document.xml`, and for each `wp:inl
 
 Repackage with the imported deterministic `write_package` helper.
 
-- [ ] **Step 3: Implement variant-specific validation**
+- [x] **Step 3: Implement variant-specific validation**
 
 Validate all of the following:
 
@@ -92,7 +92,7 @@ every drawing width <= 5,400,000 EMU and has positive proportional dimensions
 
 Confirm key mathematical operands are present in document text/OMML serialization, including `q`, `θ`, `M`, `363`, `0.03`, and `10.86`.
 
-- [ ] **Step 4: Implement the build pipeline**
+- [x] **Step 4: Implement the build pipeline**
 
 `main()` must run in this order:
 
@@ -107,7 +107,7 @@ print absolute output path
 
 Any failed validation must exit nonzero and must not write the original full-disclosure DOCX.
 
-- [ ] **Step 5: Run static and focused package tests**
+- [x] **Step 5: Run static and focused package tests**
 
 Run:
 
@@ -119,7 +119,7 @@ unzip -t docs/patents/point-mass-trajectory-reconstruction-technical-disclosure-
 
 Expected: compilation succeeds, build prints the variant DOCX path, ZIP reports no errors, and the builder's complete validation passes.
 
-- [ ] **Step 6: Verify byte reproducibility and commit Task 1**
+- [x] **Step 6: Verify byte reproducibility and commit Task 1**
 
 Hash the generated DOCX, run the builder again, and require the second SHA-256 to match the first. Run `git diff --check` and confirm the original DOCX remains outside the staged paths. Commit only:
 
