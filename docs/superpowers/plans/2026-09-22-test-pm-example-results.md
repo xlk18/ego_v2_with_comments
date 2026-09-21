@@ -199,7 +199,7 @@ git commit -m "docs: capture test_pm example results"
 - Consumes: source-derived parameters and Task 2 measured results.
 - Produces: the final Markdown with renamed sections, actual example narrative, and relative image links.
 
-- [ ] **Step 1: Rename both headings**
+- [x] **Step 1: Rename both headings**
 
 Apply exactly:
 
@@ -208,7 +208,7 @@ Apply exactly:
 ## 有益效果 -> ## 算法增益效果
 ```
 
-- [ ] **Step 2: Replace the example body with the real node example**
+- [x] **Step 2: Replace the example body with the real node example**
 
 Replace the current parameterized example with a self-contained description of:
 
@@ -222,7 +222,7 @@ Replace the current parameterized example with a self-contained description of:
 
 Insert the two relative image links specified in the approved design directly below their respective explanatory paragraphs.
 
-- [ ] **Step 3: Validate document-to-data consistency**
+- [x] **Step 3: Validate document-to-data consistency**
 
 Run a Python validator that reads the JSON and Markdown and asserts:
 
@@ -239,7 +239,7 @@ no 仿真验证与效果说明 or 附图说明 section is restored
 
 Also verify all Markdown fences/math delimiters remain balanced and `git diff --check` passes.
 
-- [ ] **Step 4: Review scope and commit**
+- [x] **Step 4: Review scope and commit**
 
 Confirm the original full Markdown is unchanged and the user-edited DOCX/lock, Figure 1 files, and `.github/` remain unstaged. Then commit only the updated Markdown and completed plan:
 
