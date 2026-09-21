@@ -33,7 +33,7 @@
 - Consumes: the theory-correct equations, definitions, proofs, pseudocode, and implementation example in the reviewed patent draft.
 - Produces: one standalone Markdown document that Pandoc can convert without relying on the audit report or conformance ledger.
 
-- [ ] **Step 1: Write the document front matter and disclosure structure**
+- [x] **Step 1: Write the document front matter and disclosure structure**
 
 Create the source with the exact top-level title `质点轨迹重构算法专利技术交底书` and the following second-level sections in this order:
 
@@ -58,11 +58,11 @@ Create the source with the exact top-level title `质点轨迹重构算法专利
 仿真验证与效果说明（预留）
 ```
 
-- [ ] **Step 2: Recast the reviewed material as disclosure prose**
+- [x] **Step 2: Recast the reviewed material as disclosure prose**
 
 Remove the original front-page disclaimer, abstract, formal claims, numbered patent paragraphs, “其他说明”, audit language, and code-state comparisons. Merge repeated derivations so each equation is introduced once, while retaining definitions and proof conditions.
 
-- [ ] **Step 3: Preserve the complete theory**
+- [x] **Step 3: Preserve the complete theory**
 
 Ensure the source explicitly contains:
 
@@ -79,11 +79,11 @@ position/velocity continuity and allowed acceleration jumps
 explicit inclusion of the final endpoint
 ```
 
-- [ ] **Step 4: Add the intentionally blank simulation section**
+- [x] **Step 4: Add the intentionally blank simulation section**
 
 The final section must contain only neutral placeholders for simulation platform and parameters, original-versus-reconstructed trajectory plots, position/velocity/acceleration curves, completion time and computation time, result analysis, and conclusion. It may state that a third-party planner supplies only the comparison trajectory and is not part of the invention.
 
-- [ ] **Step 5: Run source-content checks**
+- [x] **Step 5: Run source-content checks**
 
 Run:
 
