@@ -34,7 +34,7 @@
 - Consumes: the complete reviewed disclosure and the exact deletion boundaries in the approved design.
 - Produces: a standalone Markdown disclosure with the remaining text in its original order and no dependency on the source file at read time.
 
-- [ ] **Step 1: Record source integrity and verify the target is initially absent**
+- [x] **Step 1: Record source integrity and verify the target is initially absent**
 
 Run:
 
@@ -45,7 +45,7 @@ test ! -e docs/patents/point-mass-trajectory-reconstruction-technical-disclosure
 
 Expected: a source hash is printed and `test` exits with status 0.
 
-- [ ] **Step 2: Copy the source and remove electronic-device carrier content**
+- [x] **Step 2: Copy the source and remove electronic-device carrier content**
 
 Copy the source to the exact target path without overwriting an existing file. In the copy only:
 
@@ -55,7 +55,7 @@ Copy the source to the exact target path without overwriting an existing file. I
 
 Use `apply_patch` for all content edits after the initial file copy.
 
-- [ ] **Step 3: Remove all figure and simulation content**
+- [x] **Step 3: Remove all figure and simulation content**
 
 In the copy only:
 
@@ -67,7 +67,7 @@ In the copy only:
 
 After this step, the document must end with the final paragraph of `## 有益效果`.
 
-- [ ] **Step 4: Remove the four specified theory sections by heading boundary**
+- [x] **Step 4: Remove the four specified theory sections by heading boundary**
 
 In the copy only, delete:
 
@@ -87,7 +87,7 @@ up to but not including ## 轨迹解析重构及连续性说明
 
 Do not delete dynamic-programming operations retained in other sections or in the pseudocode.
 
-- [ ] **Step 5: Remove dangling proof and figure references**
+- [x] **Step 5: Remove dangling proof and figure references**
 
 Read the complete copy from beginning to end. Remove or minimally rewrite only sentences that point exclusively to deleted material, including variants of:
 
@@ -103,7 +103,7 @@ Read the complete copy from beginning to end. Remove or minimally rewrite only s
 
 Do not replace deleted content with a summary, disclaimer, deletion note, or new proof.
 
-- [ ] **Step 6: Run exact automated validation**
+- [x] **Step 6: Run exact automated validation**
 
 Run:
 
@@ -148,8 +148,8 @@ for required in [
     assert required in h2, required
 
 assert '算法一：航点速度搜索与质点轨迹时间重分配' in t
-assert '算法二：单轴两阶段时间最优转移' in t
-assert '算法三：给定公共时间的三轴同步判定' in t
+assert '算法二：单轴两阶段转移求解' in t
+assert '算法三：求候选边的最小共同可行时间' in t
 assert t.count('```') % 2 == 0
 assert t.count('\\[') == t.count('\\]')
 assert t.count('\\(') == t.count('\\)')
@@ -159,7 +159,7 @@ PY
 
 Expected: `PASS: H2=15, chars=<positive number>`.
 
-- [ ] **Step 7: Perform semantic diff review**
+- [x] **Step 7: Perform semantic diff review**
 
 Run:
 
@@ -171,7 +171,7 @@ git diff --no-index --word-diff=plain \
 
 Review the output and confirm every removal belongs to the approved deletion list or is a minimal dangling-reference edit. Confirm no retained equation, pseudocode branch, implementation example parameter, or beneficial-effect statement was accidentally changed.
 
-- [ ] **Step 8: Commit only the new Markdown and completed plan**
+- [x] **Step 8: Commit only the new Markdown and completed plan**
 
 Run:
 
