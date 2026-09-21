@@ -1,0 +1,26 @@
+{
+  "node": "pmps_test_node",
+  "topic": "/generated_trajectory",
+  "frame_id": "map",
+  "sample_period_s": 0.03,
+  "point_count": 363,
+  "sampled_duration_s": 10.86,
+  "computation_time_s": 0.0226,
+  "acceleration_upper_mps2": 20.0,
+  "acceleration_lower_mps2": -20.0,
+  "configured_circle_points": 7,
+  "total_waypoints_including_start": 8,
+  "radius_m": 25.0,
+  "height_m": 2.0,
+  "start_position_m": [
+    0.0,
+    0.0,
+    2.0
+  ],
+  "start_velocity_mps": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "fix_replan": false
+}

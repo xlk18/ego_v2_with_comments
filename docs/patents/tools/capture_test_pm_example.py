@@ -411,6 +411,13 @@ def write_outputs(
                 s=40,
                 zorder=3,
             )
+            trajectory.text2D(
+                0.02,
+                0.96,
+                "Source start / waypoint 7 coincide",
+                transform=trajectory.transAxes,
+                fontsize=10,
+            )
             trajectory.set_xlabel("x (m)")
             trajectory.set_ylabel("y (m)")
             trajectory.set_zlabel("z (m)")
