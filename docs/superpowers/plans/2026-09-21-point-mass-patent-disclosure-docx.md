@@ -176,7 +176,7 @@ It must assert the presence of the Chinese title, the simulation-placeholder hea
 - Consumes: the Markdown source and formatting utility from Tasks 1 and 2.
 - Produces: the final DOCX and a temporary PDF used only for inspection.
 
-- [ ] **Step 1: Generate the DOCX**
+- [x] **Step 1: Generate the DOCX**
 
 Run:
 
@@ -186,7 +186,7 @@ python3 docs/patents/tools/build_disclosure_docx.py
 
 Expected: prints the absolute DOCX output path and exits with status 0.
 
-- [ ] **Step 2: Verify LibreOffice can load and export it**
+- [x] **Step 2: Verify LibreOffice can load and export it**
 
 Run:
 
@@ -199,7 +199,7 @@ pdfinfo "$preview_dir/point-mass-trajectory-reconstruction-technical-disclosure.
 
 Expected: conversion succeeds, the PDF is non-empty, and `Pages:` reports a positive page count.
 
-- [ ] **Step 3: Inspect representative pages**
+- [x] **Step 3: Inspect representative pages**
 
 Render the first page, a formula-heavy middle page, a pseudocode page, and the final simulation-placeholder page to PNG using `pdftoppm`; inspect them for title placement, Chinese glyphs, heading hierarchy, clipped equations, broken tables, and footer page numbers. If any defect is present, adjust the formatter and rebuild.
 
