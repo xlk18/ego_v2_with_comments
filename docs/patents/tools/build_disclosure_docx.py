@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Build the technical disclosure as a consistently styled, editable DOCX."""
+"""Build an editable DOCX with a verified, navigable table of contents.
+
+Requires Pandoc, LibreOffice and Poppler's pdftotext. LibreOffice measures the
+current environment's pagination and checks all pages for equation-import error
+markers; it does not rewrite the DOCX. Word can update the TOC/PAGEREF fields if
+the recipient's fonts or pagination differ.
+"""
 
 from __future__ import annotations
 
@@ -124,6 +130,17 @@ def set_normal_paragraph_style(styles: ET.Element) -> None:
     spacing.set(qn(W_NS, "lineRule"), "auto")
     indent = find_or_add(paragraph_properties, qn(W_NS, "ind"))
     indent.set(qn(W_NS, "firstLine"), "480")
+
+
+def normalize_style_order(styles: ET.Element) -> None:
+    """Respect CT_Style order, including styles created without a reference."""
+    order = ["name", "aliases", "basedOn", "next", "link", "autoRedefine",
+             "hidden", "uiPriority", "semiHidden", "unhideWhenUsed", "qFormat",
+             "locked", "personal", "personalCompose", "personalReply", "rsid",
+             "pPr", "rPr", "tblPr", "trPr", "tcPr", "tblStylePr"]
+    ranks = {qn(W_NS, tag): rank for rank, tag in enumerate(order)}
+    for style in styles.findall("w:style", NS):
+        style[:] = sorted(style, key=lambda child: ranks.get(child.tag, len(order)))
 
 
 def footer_xml() -> bytes:
@@ -271,8 +288,15 @@ def word_text_run(text: str) -> ET.Element:
 
 
 def contains_libreoffice_unsafe_math(math: ET.Element) -> bool:
+    # LO 6.4's OMML importer misinterprets literal delimiter runs and a bare
+    # operator subscript as StarMath syntax. Structural tags alone miss these.
     unsafe_tags = {"d", "m", "sSup", "sSubSup"}
-    return "∞" in serialize_omml(math) or any(
+    text = serialize_omml(math)
+    operator_subscript = any(
+        serialize_omml(sub).strip() in {"+", "−", "-"}
+        for sub in math.findall(".//m:sub", NS)
+    )
+    return any(character in text for character in "∞|[]") or operator_subscript or any(
         element.tag.rsplit("}", 1)[-1] in unsafe_tags
         for element in math.iter()
     )
@@ -384,7 +408,33 @@ def populate_toc(document: ET.Element, sections: list[str]) -> None:
             paragraph_with_style("TOCHeading", "目录"),
             toc_field_boundary("begin"),
         ]
-        entries.extend(paragraph_with_style("TOC1", text) for text in sections)
+        headings = [p for p in document.findall(".//w:p", NS)
+                    if p.find("w:pPr/w:pStyle[@w:val='Heading2']", NS) is not None]
+        bookmark_ids = [int(item.get(qn(W_NS, "id"), "0"))
+                        for item in document.findall(".//w:bookmarkStart", NS)]
+        next_id = max(bookmark_ids, default=0) + 1
+        for number, (text, heading) in enumerate(zip(sections, headings), 1):
+            anchor = f"DisclosureSection{number}"
+            bookmark_id = str(next_id + number)
+            heading.insert(1, ET.Element(qn(W_NS, "bookmarkStart"),
+                {qn(W_NS, "id"): bookmark_id, qn(W_NS, "name"): anchor}))
+            heading.append(ET.Element(qn(W_NS, "bookmarkEnd"),
+                                      {qn(W_NS, "id"): bookmark_id}))
+            entry = paragraph_with_style("TOC1", "")
+            entry.remove(entry[-1])
+            properties = entry.find(qn(W_NS, "pPr"))
+            tabs = ET.SubElement(properties, qn(W_NS, "tabs"))
+            ET.SubElement(tabs, qn(W_NS, "tab"), {qn(W_NS, "val"): "right",
+                qn(W_NS, "leader"): "dot", qn(W_NS, "pos"): "9026"})
+            hyperlink = ET.SubElement(entry, qn(W_NS, "hyperlink"),
+                {qn(W_NS, "anchor"): anchor, qn(W_NS, "history"): "1"})
+            hyperlink.append(word_text_run(text))
+            tab_run = ET.SubElement(hyperlink, qn(W_NS, "r"))
+            ET.SubElement(tab_run, qn(W_NS, "tab"))
+            page_ref = ET.SubElement(hyperlink, qn(W_NS, "fldSimple"),
+                {qn(W_NS, "instr"): f" PAGEREF {anchor} \\h "})
+            page_ref.append(word_text_run("00"))
+            entries.append(entry)
         entries.append(toc_field_boundary("end"))
         for entry in entries:
             content.append(entry)
@@ -409,6 +459,7 @@ def restyle_docx(path: Path) -> None:
     set_style(styles, "Heading3", "黑体", "Arial", 24, bold=True)
     set_style(styles, "SourceCode", "等线", "Courier New", 20)
     set_normal_paragraph_style(styles)
+    normalize_style_order(styles)
     package_files["word/styles.xml"] = ET.tostring(
         styles, encoding="utf-8", xml_declaration=True
     )
@@ -436,6 +487,12 @@ def restyle_docx(path: Path) -> None:
     )
     package_files["word/footer1.xml"] = footer_xml()
     normalize_core_properties(package_files)
+
+    write_package(path, package_files)
+
+
+def write_package(path: Path, package_files: dict[str, bytes]) -> None:
+    """Write stable ZIP metadata, including after page-reference updates."""
 
     with tempfile.NamedTemporaryFile(
         suffix=".docx", dir=path.parent, delete=False
@@ -542,11 +599,85 @@ def validate_docx(path: Path) -> None:
         style.get(qn(W_NS, "styleId")) for style in styles.findall("w:style", NS)
     }
     require(required_style_ids <= present_style_ids, "missing required Word styles")
+    for style in styles.findall("w:style", NS):
+        tags = [child.tag for child in style]
+        if qn(W_NS, "pPr") in tags and qn(W_NS, "rPr") in tags:
+            require(tags.index(qn(W_NS, "pPr")) < tags.index(qn(W_NS, "rPr")),
+                    "style paragraph properties follow run properties")
+    bookmarks = {item.get(qn(W_NS, "name"))
+                 for item in document.findall(".//w:bookmarkStart", NS)}
+    toc = document.find(".//w:sdtContent", NS)
+    require(toc is not None, "missing updateable TOC")
+    links = toc.findall(".//w:hyperlink", NS)
+    require(len(links) == 18, "missing TOC hyperlinks")
+    for link in links:
+        anchor = link.get(qn(W_NS, "anchor"))
+        require(anchor in bookmarks, "TOC hyperlink has no destination")
+        field = link.find("w:fldSimple", NS)
+        require(field is not None and f"PAGEREF {anchor}" in field.get(qn(W_NS, "instr"), ""),
+                "missing TOC page reference field")
+        require("".join(field.itertext()).isdigit(), "missing cached TOC page number")
+
+
+def export_and_check_pdf(path: Path, directory: Path) -> list[str]:
+    """Check every rendered page, not just selected formula screenshots."""
+    directory.mkdir(parents=True, exist_ok=True)
+    profile = directory / "lo-profile"
+    run(["libreoffice", f"-env:UserInstallation={profile.as_uri()}", "--headless",
+         "--convert-to", "pdf", "--outdir", str(directory), str(path)])
+    pdf = directory / path.with_suffix(".pdf").name
+    require(pdf.is_file(), "LibreOffice did not produce a PDF")
+    result = subprocess.run(["pdftotext", "-layout", str(pdf), "-"],
+                            check=True, capture_output=True, text=True)
+    pages = result.stdout.split("\f")
+    if not pages[-1].strip():
+        pages.pop()
+    require(bool(pages), "empty PDF")
+    for number, page in enumerate(pages, 1):
+        require(not any(marker in page for marker in ("¿", "�", "<?>")),
+                f"equation rendering error marker on PDF page {number}")
+    return pages
+
+
+def cache_toc_page_numbers(path: Path) -> None:
+    """Cache PAGEREF results using checked, convergent PDF pagination.
+
+    The field remains updateable in Word. We keep Pandoc's original editable
+    content, using LibreOffice only to measure pagination, never to rewrite it.
+    Re-export verifies both full-document equation rendering and page stability.
+    """
+    with tempfile.TemporaryDirectory(prefix="disclosure-pagination-") as temporary:
+        for attempt in range(3):
+            pages = export_and_check_pdf(path, Path(temporary) / str(attempt))
+            with zipfile.ZipFile(path) as package:
+                files = {name: package.read(name) for name in package.namelist()}
+            document = ET.fromstring(files["word/document.xml"])
+            entries = document.findall(".//w:sdtContent/w:p/w:hyperlink", NS)
+            changed = False
+            for entry in entries:
+                heading = "".join(entry.find("w:r", NS).itertext())
+                compact_heading = re.sub(r"\s+", "", heading)
+                matches = [number for number, page in enumerate(pages, 1)
+                           if compact_heading in re.sub(r"\s+", "", page)]
+                require(len(matches) >= 2, f"cannot locate body heading: {heading}")
+                # The first occurrence is in the TOC; the last is the body heading.
+                number = str(matches[-1])
+                cache = entry.find("w:fldSimple/w:r/w:t", NS)
+                if cache.text != number:
+                    cache.text = number
+                    changed = True
+            if not changed:
+                print(f"PDF PASS: {len(pages)} pages; all pages free of error markers; TOC page references stable")
+                return
+            files["word/document.xml"] = ET.tostring(document, encoding="utf-8", xml_declaration=True)
+            write_package(path, files)
+    raise ValueError("TOC pagination did not converge in three exports")
 
 
 def main() -> int:
     build_with_pandoc(SOURCE, OUTPUT)
     restyle_docx(OUTPUT)
+    cache_toc_page_numbers(OUTPUT)
     validate_docx(OUTPUT)
     print(OUTPUT)
     return 0
