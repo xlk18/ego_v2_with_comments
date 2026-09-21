@@ -105,7 +105,7 @@ for phrase in [
     '已验证的同一组边参数', '补入终端状态', '结束'
 ]:
     assert phrase in t, phrase
-for forbidden in ['EGO-Planner', 'calculateTperAxis', 'refineTperAxis', 'data:image', '#ff', '#00', '#cc']:
+for forbidden in ['EGO-Planner', 'calculateTperAxis', 'refineTperAxis', 'data:image', 'linearGradient', 'radialGradient', 'filter=']:
     assert forbidden not in t, forbidden
 assert t.count('marker-end:url(#arrow)') >= 15
 print('SVG PASS')
