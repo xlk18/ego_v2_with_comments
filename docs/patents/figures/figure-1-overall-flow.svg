@@ -83,8 +83,8 @@
   <text class="branch" x="510" y="1322">否</text>
   <path class="flow" marker-end="url(#arrow)" style="marker-end:url(#arrow)" d="M1050 1340 H1080"/>
   <text class="branch" x="1058" y="1322">是</text>
-  <path class="flow" marker-end="url(#arrow)" style="marker-end:url(#arrow)" d="M295 1390 V1500 H800"/>
-  <path class="flow" marker-end="url(#arrow)" style="marker-end:url(#arrow)" d="M1305 1410 V1500 H800"/>
+  <path class="flow" style="marker-end:none" d="M295 1390 V1500 H800"/>
+  <path class="flow" style="marker-end:none" d="M1305 1410 V1500 H800"/>
   <path class="flow" marker-end="url(#arrow)" style="marker-end:url(#arrow)" d="M800 1500 V1550"/>
   <path class="flow" marker-end="url(#arrow)" style="marker-end:url(#arrow)" d="M800 1770 V1820"/>
   <text class="branch" x="823" y="1805">是</text>
