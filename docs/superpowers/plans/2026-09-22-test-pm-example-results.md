@@ -111,7 +111,7 @@ git commit -m "docs: add test_pm result capture tools"
 - Consumes: the compiled `devel/lib/point_mass_model/test_pm` executable and Task 1 tools.
 - Produces: one real Path data set, its measured summary, and two images from the same ROS run.
 
-- [ ] **Step 1: Start an isolated ROS run and capture the Path**
+- [x] **Step 1: Start an isolated ROS run and capture the Path**
 
 Use a temporary run directory and explicit PIDs. Source `swarm-playground/main_ws/devel/setup.bash`, start `roscore`, start `rosrun point_mass_model test_pm` with stdout/stderr redirected to the run log, and wait until the computation-time log line appears. Then run:
 
@@ -126,7 +126,7 @@ python3 docs/patents/tools/capture_test_pm_example.py \
 
 Expected: capture exits 0 after receiving a nonempty latched Path.
 
-- [ ] **Step 2: Start RViz and capture the real window**
+- [x] **Step 2: Start RViz and capture the real window**
 
 While the same ROS master and node remain alive, start:
 
@@ -142,7 +142,7 @@ docs/patents/figures/test-pm-rviz-result.png
 
 After capture, terminate only the explicitly recorded RViz, node, and roscore PIDs. Do not use broad process-kill commands.
 
-- [ ] **Step 3: Validate numerical artifacts**
+- [x] **Step 3: Validate numerical artifacts**
 
 Run a Python check that:
 
@@ -163,7 +163,7 @@ height_m is 2
 
 Use `identify` to verify both images are nonempty PNG files, the curve image is exactly 1800-by-900 pixels, and the RViz image is at least 1200 pixels wide and 750 pixels high.
 
-- [ ] **Step 4: Visually inspect both images**
+- [x] **Step 4: Visually inspect both images**
 
 Inspect at original detail. Confirm:
 
@@ -178,7 +178,7 @@ Plot: 3D path and eight source-defined waypoint markers are visible;
 
 If an image fails, correct the RViz view or plotting utility and regenerate from the same captured CSV/JSON whenever the underlying data remain unchanged.
 
-- [ ] **Step 5: Commit Task 2 artifacts**
+- [x] **Step 5: Commit Task 2 artifacts**
 
 ```bash
 git add docs/patents/data/test-pm-generated-trajectory.csv \
