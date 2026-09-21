@@ -272,7 +272,7 @@ def word_text_run(text: str) -> ET.Element:
 
 def contains_libreoffice_unsafe_math(math: ET.Element) -> bool:
     unsafe_tags = {"d", "m", "sSup", "sSubSup"}
-    return any(
+    return "∞" in serialize_omml(math) or any(
         element.tag.rsplit("}", 1)[-1] in unsafe_tags
         for element in math.iter()
     )
@@ -347,19 +347,47 @@ def paragraph_with_style(style_id: str, text: str) -> ET.Element:
     return paragraph
 
 
+def toc_field_boundary(field_type: str) -> ET.Element:
+    """Create one boundary of an updateable TOC field with cached entries."""
+    paragraph = ET.Element(qn(W_NS, "p"))
+    if field_type == "begin":
+        run = ET.SubElement(paragraph, qn(W_NS, "r"))
+        ET.SubElement(run, qn(W_NS, "fldChar"), {qn(W_NS, "fldCharType"): "begin"})
+        run = ET.SubElement(paragraph, qn(W_NS, "r"))
+        instruction = ET.SubElement(run, qn(W_NS, "instrText"))
+        instruction.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+        instruction.text = ' TOC \\o "1-3" \\h \\z \\u '
+        run = ET.SubElement(paragraph, qn(W_NS, "r"))
+        ET.SubElement(run, qn(W_NS, "fldChar"), {qn(W_NS, "fldCharType"): "separate"})
+    elif field_type == "end":
+        run = ET.SubElement(paragraph, qn(W_NS, "r"))
+        ET.SubElement(run, qn(W_NS, "fldChar"), {qn(W_NS, "fldCharType"): "end"})
+    else:
+        raise ValueError(f"unsupported TOC field boundary: {field_type}")
+    return paragraph
+
+
 def populate_toc(document: ET.Element, sections: list[str]) -> None:
-    """Replace Pandoc's empty field-only TOC with visible static entries."""
+    """Keep an updateable TOC field while supplying visible cached entries."""
     body = document.find(qn(W_NS, "body"))
     if body is None:
         raise ValueError("missing document body")
     for index, child in enumerate(list(body)):
         if child.tag != qn(W_NS, "sdt"):
             continue
-        entries = [paragraph_with_style("TOCHeading", "目录")]
+        content = child.find(qn(W_NS, "sdtContent"))
+        if content is None:
+            raise ValueError("missing table-of-contents content")
+        for entry in list(content):
+            content.remove(entry)
+        entries = [
+            paragraph_with_style("TOCHeading", "目录"),
+            toc_field_boundary("begin"),
+        ]
         entries.extend(paragraph_with_style("TOC1", text) for text in sections)
-        body.remove(child)
-        for offset, entry in enumerate(entries):
-            body.insert(index + offset, entry)
+        entries.append(toc_field_boundary("end"))
+        for entry in entries:
+            content.append(entry)
         return
     raise ValueError("missing Pandoc table of contents")
 
