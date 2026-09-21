@@ -52,7 +52,7 @@
   <text class="label small" x="1305" y="1370">切换时刻和缩放系数</text>
 
   <polygon class="node" points="800,1550 1060,1660 800,1770 540,1660"/>
-  <text class="label" x="800" y="1650">相邻层候选边是否全部处理完成？</text>
+  <text class="label small" x="800" y="1645"><tspan x="800">相邻层候选边是否</tspan><tspan x="800" dy="38">全部处理完成？</tspan></text>
 
   <rect class="node" x="175" y="1820" width="1250" height="100"/>
   <text class="label" x="800" y="1882">在分层有向无环图上执行动态规划</text>
