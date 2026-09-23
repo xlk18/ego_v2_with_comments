@@ -503,3 +503,50 @@ git commit -m "docs: verify LaTeX disclosure build"
 ```
 
 Expected: the commit contains only reviewed source or guide corrections. If no corrections were required, do not create an empty commit.
+
+---
+
+### Task 5: Submit the completed patent source to the configured remote
+
+**Files:**
+- No new files created.
+- Remote target: `origin` (`git@github.com:xlk18/ego_v2_with_comments.git`).
+- Remote branch: `main`.
+
+**Interfaces:**
+- Consumes: all reviewed commits from Tasks 1–4 and the final whole-branch review.
+- Produces: an updated `origin/main` containing the formal patent LaTeX source, environment configuration, usage guide, design, and implementation plan.
+
+- [ ] **Step 1: Review exactly what will be pushed**
+
+Run:
+
+```bash
+git fetch origin main
+git log --oneline --decorate origin/main..HEAD
+git diff --stat origin/main..HEAD
+git status --short
+```
+
+Expected: the outgoing commit range includes the reviewed patent work; the user's modified Word document, lock file, and unrelated untracked directory remain outside commits.
+
+- [ ] **Step 2: Push the reviewed branch**
+
+Run:
+
+```bash
+git push origin main
+```
+
+Expected: Git reports that local `main` updates `origin/main` without a non-fast-forward error.
+
+- [ ] **Step 3: Verify the remote branch**
+
+Run:
+
+```bash
+test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+git status --short --branch
+```
+
+Expected: local `HEAD` and `origin/main` resolve to the same commit; only the pre-existing unstaged and untracked user files remain in the working tree.
