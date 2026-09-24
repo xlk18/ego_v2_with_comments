@@ -1,3 +1,7 @@
 {
-    "cmake.sourceDirectory": "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/VIO"
+  "cmake.sourceDirectory": "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/VIO",
+  "latex-workshop.latex.outDir": "%DIR%/build",
+  "latex-workshop.latex.recipe.default": "latexmk (xelatex)",
+  "latex-workshop.view.pdf.viewer": "tab",
+  "latex-workshop.latex.autoBuild.run": "onSave"
 }
