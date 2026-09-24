@@ -115,16 +115,16 @@ Expected: JSON validation succeeds and the backup has the same SHA-256 hash as t
 
 - [ ] **Step 2: Merge the LaTeX Workshop configuration into user settings**
 
-Add the following top-level keys without removing or changing existing keys:
+Add the following top-level keys without removing or changing existing non-LaTeX keys. For LaTeX Workshop 10.19.0, remove the unsupported `latex-workshop.latex.clean.enabled` and `latex-workshop.latex.clean.onFailBuild.enabled` keys if present; use `latex-workshop.latex.autoClean.run` instead. Disable build magic comments so a source-level `% !TeX program = xelatex` does not bypass the configured `latexmk` recipe and output directory.
 
 ```json
 "latex-workshop.latex.autoBuild.run": "onSave",
+"latex-workshop.latex.build.enableMagicComments": false,
 "latex-workshop.latex.outDir": "%DIR%/build",
 "latex-workshop.latex.recipe.default": "latexmk (xelatex)",
 "latex-workshop.view.pdf.viewer": "tab",
 "latex-workshop.synctex.afterBuild.enabled": true,
-"latex-workshop.latex.clean.enabled": true,
-"latex-workshop.latex.clean.onFailBuild.enabled": true,
+"latex-workshop.latex.autoClean.run": "onFailed",
 "latex-workshop.latex.tools": [
   {
     "name": "latexmk-xelatex",
@@ -175,6 +175,7 @@ Change `.vscode/settings.json` to:
   "cmake.sourceDirectory": "/home/yyf/EGO-Planner-v2/swarm-playground/main_ws/src/VIO",
   "latex-workshop.latex.outDir": "%DIR%/build",
   "latex-workshop.latex.recipe.default": "latexmk (xelatex)",
+  "latex-workshop.latex.build.enableMagicComments": false,
   "latex-workshop.view.pdf.viewer": "tab",
   "latex-workshop.latex.autoBuild.run": "onSave"
 }
@@ -228,7 +229,8 @@ BibLaTeX 文档使用 Biber，传统 BibTeX 文档使用 BibTeX。`latexmk` 会�
 ## 格式化、检查与统计
 
 ```bash
-latexindent 文件名.tex > /tmp/formatted.tex
+mkdir -p build
+latexindent -c build/ 文件名.tex > /tmp/formatted.tex
 chktex -q 文件名.tex
 texcount -inc -sum 文件名.tex
 ```
@@ -470,7 +472,8 @@ Run:
 ```bash
 cd docs/patents
 chktex -q point-mass-trajectory-reconstruction-technical-disclosure.tex || true
-latexindent point-mass-trajectory-reconstruction-technical-disclosure.tex \
+mkdir -p build
+latexindent -c build/ point-mass-trajectory-reconstruction-technical-disclosure.tex \
   > /tmp/point-mass-disclosure-formatted.tex
 test -s /tmp/point-mass-disclosure-formatted.tex
 texcount -inc -sum point-mass-trajectory-reconstruction-technical-disclosure.tex

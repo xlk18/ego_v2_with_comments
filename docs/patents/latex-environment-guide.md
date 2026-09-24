@@ -21,7 +21,8 @@ BibLaTeX 文档使用 Biber，传统 BibTeX 文档使用 BibTeX。`latexmk` 会�
 ## 格式化、检查与统计
 
 ```bash
-latexindent 文件名.tex > /tmp/formatted.tex
+mkdir -p build
+latexindent -c build/ 文件名.tex > /tmp/formatted.tex
 chktex -q 文件名.tex
 texcount -inc -sum 文件名.tex
 ```
