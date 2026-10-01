@@ -118,9 +118,9 @@ test "$(pdfimages -list "$pdf" | awk 'NR>2 && $3=="image" {n++} END {print n+0}'
 pdftotext -bbox-layout "$pdf" /tmp/patent-no-toc-bbox.html
 ```
 
-Parse `/tmp/patent-no-toc-bbox.html` and assert on every page after the first that at least one page-number word consists only of digits, has horizontal center within 20 points of the page center, and has `yMin` within the bottom 50 points. Also confirm no section-title text appears in the top 50 points of representative body pages.
+Parse `/tmp/patent-no-toc-bbox.html` and assert on every page after the first that at least one page-number word consists only of digits, has horizontal center within 20 points of the page center, and has vertical center `(yMin + yMax) / 2` within the bottom 60 points. Also confirm no section-title text appears in the top 50 points of representative body pages.
 
-Expected: A4 PDF, no contents heading, all required content and images present, clean compiler log, and numeric page labels centered at the bottom rather than appearing in the header.
+Expected: A4 PDF, no contents heading, all required content and images present, clean compiler log, and numeric page labels with horizontal centers within 20 points of the page center and vertical centers within the bottom 60 points, matching the user-approved standard `plain` footer; no section-title text in the top 50 points of representative body pages.
 
 - [ ] **Step 6: Render and visually inspect representative pages**
 
